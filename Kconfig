@@ -1,0 +1,16 @@
+menu "Javacard"
+
+config JAVACARD_PET_PIN
+   int "Pet PIN" 
+   default 456789
+   ---help---
+      Set the PIN to identify the Javacard token using predefined word
+      like a pet name
+
+config JAVACARD_USER_PIN
+   int "User PIN"
+   default 12345678
+   ---help---
+     Set the bord unlocking PIN
+
+endmenu

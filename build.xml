@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+file: build.xml
+  -->
+
+<project basedir="." default="build" name="GoodUSB-Javacard-applet">
+
+  <property name="JC303" value="sdks/jc303_kit"/>
+  <property name="builddir" value="build"/>
+
+  <taskdef name="javacard"
+           classname="pro.javacard.ant.JavaCard"
+           classpath="ant-javacard.jar" />
+
+  <!-- Build applets -->
+  <target name="build">
+
+    <mkdir dir="${builddir}"/>
+    <mkdir dir="${builddir}/api"/>
+
+    <javacard>
+      <!-- ECDH Applet -->
+      <cap jckit="${JC303}" aid="45757477747536"
+          output="${builddir}/goodusb.cap" sources="src/goodusb">
+        <applet class="goodusb.JCDiffieHellman" aid="45757477747536417070"/>
+      </cap>
+    </javacard>
+  </target>
+
+  <target name="clean">
+      <delete dir="${builddir}"/>
+  </target>
+
+</project>
