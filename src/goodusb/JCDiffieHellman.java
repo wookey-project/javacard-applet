@@ -50,7 +50,7 @@ public class JCDiffieHellman extends Applet
 	private static Signature sigECDSA;
 	private static MessageDigest md;
 	/* PIN handling */
-	private static byte[] default_pin = { (byte) 0x31, (byte) 0x32, (byte) 0x33, (byte) 0x34, (byte) 0x35, (byte) 0x36, (byte) 0x37, (byte) 0x38 };
+	private static byte[] default_pin = { (byte) 0x31, (byte) 0x33, (byte) 0x33, (byte) 0x37 };
 	static OwnerPIN pin;
 	/* Master key(s) */
 	private static byte[] AES_ESSIV_master_key = {(byte) 0x00, (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04, (byte) 0x05, (byte) 0x06, (byte) 0x07,
