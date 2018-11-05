@@ -1,16 +1,181 @@
-menu "Javacard"
+menu "Secure tokens configuration"
 
-config JAVACARD_PET_PIN
+config USE_DIFFERENT_PHYSICAL_TOKENS
+  bool "Use a dedicated (different) physical smartcard for each token type (AUTH/DFU/<SIG>)"
+  default y
+  ---help---
+  This option allows to use or not a dedicated physical smartcard for each token type.
+  When the same physical smartcard is used, three different javacard applets are
+  used to differentiate the token type (also ensuring security isolation).
+  For enhanced security, it is strongly advised to use different physical smartcards
+  for each token role.
+ 
+menu "AUTH token"
+config AUTH_TOKEN_PET_PIN
    int "Pet PIN" 
-   default 456789
+   default 1234
    ---help---
-      Set the PIN to identify the Javacard token using predefined word
+      Set the PIN to identify the token using predefined sentence
       like a pet name
+      NOTE: this PIN can be changed in production
 
-config JAVACARD_USER_PIN
-   int "User PIN"
-   default 12345678
+config AUTH_TOKEN_PET_NAME
+   string "Pet name"
+   default "My dog name is Bob!"
    ---help---
-     Set the bord unlocking PIN
+      Sentence to provide confidence to the user in identifying
+      the token before sending her unlocking PIN. This prevents
+      PIN stealing scenarios with trojan tokens. 
+      NOTE: this sentence can be changed in production
 
+config AUTH_TOKEN_USER_PIN
+   int "User PIN"
+   default 1234
+   ---help---
+      Set the board unlocking PIN
+      NOTE: this PIN can be changed in production
+
+config AUTH_TOKEN_MAX_PIN
+   int "Maximum failed PIN tries"
+   range 1 255
+   default 3
+   ---help---
+      Set the maximum failed PIN tries before locking the token
+      WARNING: beware when setting this since the token will be
+      completely locked after reaching this value
+      WARNING: this *cannot* be changed in production
+
+config AUTH_TOKEN_MAX_SC
+   int "Maximum failed secure channel mounting tries"
+   range 1 65535
+   default 10
+   ---help---
+      Set the maximum failed secure channel mounting tries before
+      locking the token
+      WARNING: beware when setting this since the token will be
+      completely locked after reaching this value
+      WARNING: this *cannot* be changed in production
 endmenu
+
+menu "DFU token"
+config DFU_TOKEN_PET_PIN
+   int "Pet PIN" 
+   default 1234
+   ---help---
+      Set the PIN to identify the token using predefined sentence
+      like a pet name
+      NOTE: this PIN can be changed in production
+
+config DFU_TOKEN_PET_NAME
+   string "Pet name"
+   default "My cat name is Alice!"
+   ---help---
+      Sentence to provide confidence to the user in identifying
+      the token before sending her unlocking PIN. This prevents
+      PIN stealing scenarios with trojan tokens. 
+      NOTE: this sentence can be changed in production
+
+config DFU_TOKEN_USER_PIN
+   int "User PIN"
+   default 1234
+   ---help---
+     Set the board unlocking PIN
+     NOTE: this PIN can be changed in production
+
+config DFU_TOKEN_MAX_PIN
+   int "Maximum failed PIN tries"
+   range 1 255
+   default 3
+   ---help---
+      Set the maximum failed PIN tries before locking the token
+      WARNING: beware when setting this since the token will be
+      completely locked after reaching this value
+      WARNING: this *cannot* be changed in production
+
+config DFU_TOKEN_MAX_SC
+   int "Maximum failed secure channel mounting tries"
+   range 1 65535
+   default 10
+   ---help---
+      Set the maximum failed secure channel mounting tries before
+      locking the token
+      WARNING: beware when setting this since the token will be
+      completely locked after reaching this value
+      WARNING: this *cannot* be changed in production
+endmenu
+
+config USE_SIG_TOKEN_BOOL
+  bool "Use a dedicated SIG token for firmware signature and encryption"
+  default y
+  ---help---
+  This option allows to use or not a dedicated firmware signature
+  token. When activated, a SIG token is created and the signature private
+  keys are sealed in it. When not activated, the privates keys are sealed
+  in a local keybag on the computed (using PBKDF2 and a derived used defined
+  password). It is advised for security reasons to use a dedicated SIG token.
+
+config USE_SIG_TOKEN
+  string
+  default "USE_SIG_TOKEN" if USE_SIG_TOKEN_BOOL
+  default "NO_SIG_TOKEN" if !USE_SIG_TOKEN_BOOL
+  
+menu "SIG token"
+depends on USE_SIG_TOKEN_BOOL
+config SIG_TOKEN_PET_PIN
+   int "Pet PIN" 
+   default 1234
+   ---help---
+      Set the PIN to identify the token using predefined sentence
+      like a pet name
+      NOTE: this PIN can be changed in production
+
+config SIG_TOKEN_PET_NAME
+   string "Pet name"
+   default "My fish name is Eve!"
+   ---help---
+      Sentence to provide confidence to the user in identifying
+      the token before sending her unlocking PIN. This prevents
+      PIN stealing scenarios with trojan tokens. 
+      NOTE: this sentence can be changed in production
+
+config SIG_TOKEN_USER_PIN
+   int "User PIN"
+   default 1234
+   ---help---
+     Set the board unlocking PIN
+     NOTE: this PIN can be changed in production
+
+config SIG_TOKEN_MAX_PIN
+   int "Maximum failed PIN tries"
+   range 1 255
+   default 3
+   ---help---
+      Set the maximum failed PIN tries before locking the token
+      WARNING: beware when setting this since the token will be
+      completely locked after reaching this value
+      WARNING: this *cannot* be changed in production
+
+config SIG_TOKEN_MAX_SC
+   int "Maximum failed secure channel mounting tries"
+   range 1 65535
+   default 10
+   ---help---
+      Set the maximum failed secure channel mounting tries before
+      locking the token
+      WARNING: beware when setting this since the token will be
+      completely locked after reaching this value
+      WARNING: this *cannot* be changed in production
+endmenu
+
+config LOCAL_PASSWORD
+   string "Local encryption password"
+   default "mylocalpassword"
+   depends on !USE_SIG_TOKEN_BOOL
+   ---help---
+     Set the local encryption password for signature material.
+     You have to choose a complex passphrase to avoid brute force
+     attacks! Since no secure hardware is involved (through the
+     smartcard/token), such attacks are of concern.
+     WARNING: this is less safe than using a dedicated SIG token!
+
+endmenu 

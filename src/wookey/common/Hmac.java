@@ -1,8 +1,10 @@
-package goodusb;
-
 import javacard.framework.*;
 import javacard.security.*;
 
+/* [RB] FIXME: even if our NXP JCOP does not support HMAC, we should include
+ * javacard ALG_HMAC_SHA_256 usage for the sake of completeness and for more security/performance
+ * on platforms that have such accelerators ...
+ */
 public class Hmac {
 	/* The message digest instances */
 	private MessageDigest md_i = null;
@@ -12,6 +14,7 @@ public class Hmac {
 	private byte[] opad = null;
 	private byte[] local_key;
 	private byte[] dgst_i;
+	private byte digest = 0;
 
 	protected Hmac(byte digest_type){
 		if((ipad != null) || (opad != null) || (md_i != null) || (md_o != null)){
@@ -32,7 +35,8 @@ public class Hmac {
 				break;
 			default:
 				CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-			}
+		}
+		digest = digest_type;
 	}
 
         public void hmac_init(byte[] key){
@@ -159,4 +163,23 @@ public class Hmac {
 
                 return 0;
         }
+
+	public short hmac_len(){
+		if((md_i == null) || (md_o == null)){
+			CryptoException.throwIt(CryptoException.UNINITIALIZED_KEY);
+		}
+		switch(digest){
+			case MessageDigest.ALG_SHA_224:
+				return 28;
+			case MessageDigest.ALG_SHA_256:
+				return 32;
+			case MessageDigest.ALG_SHA_384:
+				return 48;
+			case MessageDigest.ALG_SHA_512:
+				return 64;
+			default:
+				CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+		}
+		return 0;
+	}
 }

@@ -1,5 +1,3 @@
-package goodusb;
-
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.*;
@@ -11,7 +9,7 @@ public class Aes {
 	static final byte CTR = 2;
 	static final byte ENCRYPT = 0;
 	static final byte DECRYPT = 1;
-	private final short AES_BLOCK_SIZE = 16;
+	static final short AES_BLOCK_SIZE = 16;
 	/* Two variants of the CTR implementation (see below) */
 	private final byte AES_CTR_IMPLEMENTATION = 0;
 	/* Current AES mode (ECB, CBC, CTR) */
@@ -32,11 +30,8 @@ public class Aes {
 	protected Aes(short key_len, byte asked_mode){
 		iv = JCSystem.makeTransientByteArray((short) AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		last_block = JCSystem.makeTransientByteArray((short) AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
-		if(AES_CTR_IMPLEMENTATION == (byte) 0){
+		if(AES_CTR_IMPLEMENTATION == (byte) 1){
 			tmp = JCSystem.makeTransientByteArray((short) 255, JCSystem.CLEAR_ON_DESELECT);
-		}
-		else{
-			tmp = JCSystem.makeTransientByteArray((short) AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		}
 		try{
 			switch(asked_mode){
@@ -92,14 +87,14 @@ public class Aes {
 					CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 			}
 			try {
-				aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, key_builder, true);
+				aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES_TRANSIENT_DESELECT, key_builder, true);
 			}
 			catch(CryptoException e){
 				/* Our card might not support the 'true' flag for 'boolean keyEncryption': this however
 				 * does not mean that the proprietary layer does not support it ... (see the Javacard spec).
-				 * for instance JCOP cards throw an exception while the key is still encrypted ...
+				 * For instance JCOP cards throw an exception while the key is still encrypted ...
 				 */
-				aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, key_builder, false);
+				aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES_TRANSIENT_DESELECT, key_builder, false);
 			}
 			cipherAES = Cipher.getInstance(cipher_instance, false);
 		}
@@ -179,7 +174,7 @@ public class Aes {
 					}
 					break;
 				case DECRYPT:
-					if(iv == null){
+					if(asked_iv == null){
 						cipherAES.init(aesKey, Cipher.MODE_DECRYPT);
 					}
 					else{
@@ -222,14 +217,20 @@ public class Aes {
                 }
 	}
 
-	private void increment_iv(){
-		short i;
-		for(i = AES_BLOCK_SIZE; i > 0; i--){
-			if(++iv[(short)(i - 1)] != 0){
-				break;
-			}
-		}
-	}
+        private void increment_iv(){
+                short i;
+                byte end = 0, dummy = 0;
+                for(i = (short)iv.length; i > 0; i--){
+                        if(end == 0){
+                                if((++iv[(short)(i - 1)] != 0)){
+                                        end = 1;
+                                }
+                        }
+                        else{
+                                dummy++;
+                        }
+                }
+        }
 
 	public short aes(byte[] input, short inputoffset, short inputlen, byte[] output, short outputoffset){
 		try{
@@ -238,10 +239,15 @@ public class Aes {
 			}
 			switch(mode){
 				case ECB:
+					if(inputlen % AES_BLOCK_SIZE != 0){
+						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+					}
+					return cipherAES.doFinal(input, inputoffset, inputlen, output, outputoffset);
 				case CBC:
 					if(inputlen % AES_BLOCK_SIZE != 0){
 						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 					}
+					/* Note: we use the update method for CBC to keep this feature at the lower level */
 					return cipherAES.update(input, inputoffset, inputlen, output, outputoffset);
 				case CTR:
 					if(AES_CTR_IMPLEMENTATION == (byte) 0){
@@ -259,7 +265,7 @@ public class Aes {
 						offset = last_offset;
 						for (i = 0; i < inputlen; i++){
 							if(offset == 0){
-								cipherAES.update(iv, (short) 0, (short) iv.length, last_block, (short) 0);
+								cipherAES.doFinal(iv, (short) 0, (short) iv.length, last_block, (short) 0);
 								// Increment the counter
 								increment_iv();
 							}
@@ -300,7 +306,7 @@ public class Aes {
 								Util.arrayCopyNonAtomic(iv, (short) 0, tmp, (short) (i * AES_BLOCK_SIZE), (short) AES_BLOCK_SIZE);
 								increment_iv();
 							}
-							cipherAES.update(tmp, (short) 0, (short) hardware_bytes_to_encrypt, tmp, (short) 0);
+							cipherAES.doFinal(tmp, (short) 0, (short) hardware_bytes_to_encrypt, tmp, (short) 0);
 							for(i = 0; i < (short) hardware_bytes_to_encrypt; i++){
 								output[(short)(outputoffset + i)] = (byte)(input[(short)(inputoffset + i)] ^ tmp[i]);
 							}
@@ -311,7 +317,7 @@ public class Aes {
 						}
 						if(state == (short)1){
 							// Encrypt our last block 
-							cipherAES.update(iv, (short) 0, (short) AES_BLOCK_SIZE, last_block, (short) 0);
+							cipherAES.doFinal(iv, (short) 0, (short) AES_BLOCK_SIZE, last_block, (short) 0);
 							for(i = 0; i < (short) (inputlen - bytes - hardware_bytes_to_encrypt); i++){
 								output[(short) (outputoffset + bytes + hardware_bytes_to_encrypt + i)] = (byte) (input[(short) (inputoffset + bytes + hardware_bytes_to_encrypt + i)] ^ last_block[i]);
 								last_offset++;
