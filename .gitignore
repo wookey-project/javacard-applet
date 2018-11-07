@@ -1,2 +1,11 @@
 .*.cmd
 src/goodusb/Keys.java
+build_auth/wookey_auth.cap
+build_auth/wookey_auth.jca
+build_dfu/wookey_dfu.cap
+build_dfu/wookey_dfu.jca
+build_sig/wookey_sig.cap
+build_sig/wookey_sig.jca
+src/wookey/auth/Keys.java
+src/wookey/dfu/Keys.java
+src/wookey/sig/Keys.java
