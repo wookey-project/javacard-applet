@@ -24,13 +24,14 @@ public class WooKey
 	public static final byte TOKEN_INS_SET_USER_PIN = (byte) 0x03;
 	public static final byte TOKEN_INS_SET_PET_PIN  = (byte) 0x04;
 	public static final byte TOKEN_INS_SET_PET_NAME = (byte) 0x05;
-	public static final byte TOKEN_INS_LOCK = (byte) 0x06;
-	public static final byte TOKEN_INS_GET_PET_NAME = (byte) 0x07;
-	public static final byte TOKEN_INS_GET_RANDOM = (byte) 0x08;
-	public static final byte TOKEN_INS_DERIVE_LOCAL_PET_KEY = (byte) 0x09;
+	public static final byte TOKEN_INS_USER_PIN_LOCK = (byte) 0x06;
+	public static final byte TOKEN_INS_FULL_LOCK = (byte) 0x07;
+	public static final byte TOKEN_INS_GET_PET_NAME = (byte) 0x08;
+	public static final byte TOKEN_INS_GET_RANDOM = (byte) 0x09;
+	public static final byte TOKEN_INS_DERIVE_LOCAL_PET_KEY = (byte) 0x0a;
 	/* FIXME: To be removed, for debug purpose only */
-	public static final byte TOKEN_INS_ECHO_TEST = (byte) 0x0a;
-	public static final byte TOKEN_INS_SECURE_CHANNEL_ECHO = (byte) 0x0b;
+	public static final byte TOKEN_INS_ECHO_TEST = (byte) 0x0b;
+	public static final byte TOKEN_INS_SECURE_CHANNEL_ECHO = (byte) 0x0c;
 	/* Petname global value */
 	private static byte[] PetName = null;
         private static short PetNameLength = 0;
@@ -41,7 +42,7 @@ public class WooKey
 	private static byte[] tmp;
 
 	/* Maximum PIN size */
-	private final static byte MAX_PIN_SIZE = 12;
+	private final static byte MAX_PIN_SIZE = 32;
 
         /* Random data instance */
         private static RandomData random = null;
@@ -300,9 +301,30 @@ public class WooKey
 		}
 	}
 
-	public void lock_token(APDU apdu, byte ins){
+	public void user_pin_lock_token(APDU apdu, byte ins){
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		/* The user asks to lock the token, the secure channel must be initialized */
+		if(schannel.is_secure_channel_initialized() == false){
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+			return;
+		}
+		if(data_len != 0){
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+			return;
+		}
+		/* If the session is not unlocked, we have nothing to do, else we lock it */
+		if(user_pin.isValidated() == true){
+			/* Note: we reset the pin. The side effect is a try counter reset, bu this is OK
+			 * since an unlocked session means a reset of the counters anyways.
+			 */
+			user_pin.reset();
+		}
+		schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
+	}
+
+	public void full_lock_token(APDU apdu, byte ins){
+		short data_len = schannel.receive_encrypted_apdu(apdu, data);
+		/* The user asks to fully lock the token, the secure channel must be initialized */
 		if(schannel.is_secure_channel_initialized() == false){
 			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
 			return;
@@ -324,7 +346,10 @@ public class WooKey
 			 */
 			pet_pin.reset();
 		}
+		/* Respond OK */
 		schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
+		/* Kill the secure channel */
+		schannel.close_secure_channel();
 	}
 
 	private void get_pet_name(APDU apdu, byte ins){
@@ -372,6 +397,7 @@ public class WooKey
 			short rand_len = (short) data[0];
 			random.generateData(data, (short) 0, (short) rand_len);
                         schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) rand_len, (byte) 0x90, (byte) 0x00);
+			return;
 		}
 	}
 
@@ -462,8 +488,11 @@ public class WooKey
 				/* Set user PIN */
 				set_pet_name(apdu, TOKEN_INS_SET_PET_NAME);
 				return true;
-			case (byte)TOKEN_INS_LOCK:
-				lock_token(apdu, TOKEN_INS_LOCK);
+			case (byte)TOKEN_INS_USER_PIN_LOCK:
+				user_pin_lock_token(apdu, TOKEN_INS_USER_PIN_LOCK);
+				return true;
+			case (byte)TOKEN_INS_FULL_LOCK:
+				full_lock_token(apdu, TOKEN_INS_FULL_LOCK);
 				return true;
 			case (byte)TOKEN_INS_GET_PET_NAME:
 				get_pet_name(apdu, TOKEN_INS_GET_PET_NAME);
