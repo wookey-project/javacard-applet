@@ -468,8 +468,8 @@ public class WooKey
 		}
 		catch(Exception e){
 			sc_failed_attempts++;
-			data[0] = (byte) ((short)(sc_failed_attempts - sc_failed_attempts) >> 8);
-			data[1] = (byte) ((sc_failed_attempts - sc_failed_attempts) & 0xff);
+			data[0] = (byte) ((short)(sc_max_failed_attempts - sc_failed_attempts) >> 8);
+			data[1] = (byte) ((sc_max_failed_attempts - sc_failed_attempts) & 0xff);
 			send_error(apdu, data, (short) 0, (short) 2, (byte) ins, (byte) 0x00);
 		}
 		/* Reset the failed_attempts counter if we have successfully established a channel */
