@@ -26,6 +26,15 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		register();
 	}
 
+        /* Self destroy the card */
+        private void self_destroy_card(){
+                /* We destroy all the assets */
+                Util.arrayFillNonAtomic(Keys.MasterSecretKey, (short) 0, (short) Keys.MasterSecretKey.length, (byte) 0);	
+		if(W != null){
+			W.self_destroy_card();
+		}
+        }
+
 	private void get_key(APDU apdu, byte ins){
 		/* The user asks to get the master key and its derivative, the secure channel must be initialized */
 		if(W.schannel.is_secure_channel_initialized() == false){
@@ -59,6 +68,13 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 
 	public void process(APDU apdu)
 	{
+		/* Self destroy? */
+		if(W != null){
+			if(W.destroy_card != 0){
+				self_destroy_card();
+			}
+		}
+
 		byte[] buffer = apdu.getBuffer();
 
 		if (selectingApplet()){

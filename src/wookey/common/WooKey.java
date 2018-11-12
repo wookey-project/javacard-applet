@@ -47,6 +47,9 @@ public class WooKey
         /* Random data instance */
         private static RandomData random = null;
 
+	/* Variable handling the card lock state */
+	public static byte destroy_card = 0;
+
 	protected WooKey(byte[] UserPin, byte[] PetPin, byte[] OurPrivKeyBuf, byte[] OurPubKeyBuf, byte[] WooKeyPubKeyBuf, byte[] LibECCparams, byte[] petname, short petname_length, byte max_pin_fails, short max_sc_fails)
 	{
 		schannel = new SecureChannel(UserPin, OurPrivKeyBuf, OurPubKeyBuf, WooKeyPubKeyBuf, LibECCparams);
@@ -93,6 +96,20 @@ public class WooKey
 		decrypted_local_pet_key = JCSystem.makeTransientByteArray((short) 64, JCSystem.CLEAR_ON_DESELECT);
 		//decrypted_local_pet_key = new byte[64];
 		tmp = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
+	}
+
+	/* Self destroy the card */
+	public void self_destroy_card(){
+		/* We destroy all the assets */
+		destroy_card = (byte) 0xff;
+		Util.arrayFillNonAtomic(Keys.OurPrivKeyBuf, (short) 0, (short) Keys.OurPrivKeyBuf.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.EncLocalPetSecretKey, (short) 0, (short) Keys.EncLocalPetSecretKey.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.PetName, (short) 0, (short) Keys.PetName.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.PetPin, (short) 0, (short) Keys.PetPin.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.UserPin, (short) 0, (short) Keys.UserPin.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.OurPubKeyBuf, (short) 0, (short) Keys.OurPubKeyBuf.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.WooKeyPubKeyBuf, (short) 0, (short) Keys.WooKeyPubKeyBuf.length, (byte) 0);
+		Util.arrayFillNonAtomic(Keys.LibECCparams, (short) 0, (short) Keys.LibECCparams.length, (byte) 0);
 	}
 
 	public void send_error(APDU apdu, byte[] err_data, short offset, short size, byte sw1, byte sw2){
@@ -157,7 +174,9 @@ public class WooKey
 		if(data_len != 16){
 			/* Bad length, decrement and respond an error */
 			try {
-				/* [RB] FIXME: the NullPointerException does not seem to decrement the pin count ... */
+				/* [RB] FIXME: the NullPointerException does not seem to decrement the pin count on the NXP JCOP ...
+				 * contrary to what the Javacard API specification documents
+				 */
 				pin.check(null, (short) 0, (byte) 0);
 			}
 			catch(Exception e){
@@ -167,12 +186,14 @@ public class WooKey
 			schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, (byte) ins, (byte) 0x02);
 		}
 		short pin_len = data[15];
-		
+	
 		/* We have the pin, check it! */
 		if(pin.check(data, (short) 0, (byte) pin_len) == false){
 			/* Was this the last hope? */
 			byte tries = pin.getTriesRemaining();
 			if(tries == 0){
+				/* Self destroy the card ...*/
+				self_destroy_card();
 				/* Card is blocked ... */
 				data[0] = tries;
 				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, (byte) ins, (byte) 0x03);
@@ -437,6 +458,8 @@ public class WooKey
 
 	public void secure_channel_init(APDU apdu, byte ins){
 		if(sc_failed_attempts >= sc_max_failed_attempts){
+			/* Self destroy the card ...*/
+			self_destroy_card();
 			send_error(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
 			return;
 		}
@@ -455,8 +478,14 @@ public class WooKey
 
 	public boolean common_apdu_process(APDU apdu)
 	{
-		byte[] buffer = apdu.getBuffer();
+		/* Check the card status */
+		if(destroy_card != 0){
+			self_destroy_card();
+			ISOException.throwIt((short) 0xDEAD);
+		}
 
+		byte[] buffer = apdu.getBuffer();
+		
 		switch (buffer[ISO7816.OFFSET_INS])
 		{
 			case (byte)TOKEN_INS_ECHO_TEST:

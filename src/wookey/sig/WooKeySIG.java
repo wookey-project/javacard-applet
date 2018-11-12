@@ -71,6 +71,17 @@ public class WooKeySIG extends Applet implements ExtendedLength
 		register();
 	}
 
+        /* Self destroy the card */
+        private void self_destroy_card(){
+                /* We destroy all the assets */
+                Util.arrayFillNonAtomic(Keys.MasterSecretKey, (short) 0, (short) Keys.MasterSecretKey.length, (byte) 0);
+                Util.arrayFillNonAtomic(Keys.FirmwareSigPrivKeyBuf, (short) 0, (short) Keys.FirmwareSigPrivKeyBuf.length, (byte) 0);
+                Util.arrayFillNonAtomic(Keys.FirmwareSigPubKeyBuf, (short) 0, (short) Keys.FirmwareSigPubKeyBuf.length, (byte) 0);
+                if(W != null){
+                        W.self_destroy_card();
+                }
+        }
+
 	/* Function that makes the chunk session IV evolve. We use a simple inrementation of the IV at each step. */
 	private void next_iv(){
                 short i;
@@ -298,6 +309,13 @@ public class WooKeySIG extends Applet implements ExtendedLength
 
 	public void process(APDU apdu)
 	{
+                /* Self destroy? */
+                if(W != null){
+                        if(W.destroy_card != 0){
+                                self_destroy_card();
+                        }
+                }
+
 		byte[] buffer = apdu.getBuffer();
 
 		if (selectingApplet()){

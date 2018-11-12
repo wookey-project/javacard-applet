@@ -384,10 +384,10 @@ public class SecureChannel {
 	}
 
 	public void pin_encrypt_sensitive_data(byte[] input, byte[] output, short input_offset, short output_offset, short len){
-                 /* We can send the key and its derivative. In order to avoid fault attacks, we encrypt
-                  * them with a key derived from the 'real' PIN: a 128-bit AES key as the first half of
-                  * SHA-256(first_IV || PIN_KEY_prefix) = SHA-256(first_IV || SHA-256(PIN))
-                  */
+                /* In order to avoid fault attacks, we encrypt sensitive data
+                 * with a key derived from the 'real' PIN: a 128-bit AES key as the first half of
+                 * SHA-256(first_IV || PIN_KEY_prefix) = SHA-256(first_IV || SHA-256(PIN))
+                 */
 		md.reset();
 		md.update(first_IV, (short) 0, (short) first_IV.length);
 		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
