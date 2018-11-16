@@ -107,9 +107,15 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
                         return;
                 }
-                /* This instruction expects data: the initial IV and its HMAC, 16 bytes for the IV + 32 byte for the HMAC */
+		/* Close any previous decrypt session */
+		close_decrypt_session();
+                /* This instruction expects data: 
+		 * Header = magic on 4 bytes || partition type on 4 bytes || version on 4 bytes || len of data after the header on 4 bytes || siglen on 4 bytes
+		 * + MAX_CHUNK_SIZE(4 bytes) + SIG + IV = (5*4) + 4 + 64 + 16
+		 * + HMAC length = 32
+		 */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-                if(data_len != (short)(dec_session_IV.length+hmac_ctx.hmac_len())){
+                if(data_len != (short)((5*4) + 4 + 64 + dec_session_IV.length + hmac_ctx.hmac_len())){
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
                         return;
                 }
@@ -120,22 +126,22 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         return;
                 }
                 else{
-			/* We extract our initial decryption IV */
-                        Util.arrayCopyNonAtomic(W.data, (short) 0, dec_session_IV, (short) 0, (short) dec_session_IV.length);
-			/* We compute its HMAC */
+			/* We compute the HMAC on the received data */
                 	hmac_ctx.hmac_init(Keys.MasterSecretKey);
-			hmac_ctx.hmac_update(dec_session_IV, (short) 0, (short) dec_session_IV.length);
+			hmac_ctx.hmac_update(W.data, (short) 0, (short) (data_len - hmac_ctx.hmac_len()));
 			hmac_ctx.hmac_finalize(W.schannel.working_buffer, (short) 0);
 			/* We compare the computed HMAC with the received one */
-			if(Util.arrayCompare(W.schannel.working_buffer, (short) 0, W.data, (short) dec_session_IV.length, hmac_ctx.hmac_len()) != 0){
+			if(Util.arrayCompare(W.schannel.working_buffer, (short) 0, W.data, (short) (data_len - hmac_ctx.hmac_len()), hmac_ctx.hmac_len()) != 0){
 				/* HMAC is not OK, return an error */
                         	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x03);
 				return;
 			}
                         /* HMAC is OK, open the session and return OK */
+			/* We can extract our initial decryption IV */
+                        Util.arrayCopyNonAtomic(W.data, (short) ((5*4) + 4 + 64), dec_session_IV, (short) 0, (short) dec_session_IV.length);
                         wookeydec_state[0] = (byte)0xff;
                         wookeydec_state[1] = (byte)0xff;
-                        /* Initialize total number of chunk to 0 */
+                        /* Initialize total number of chunks to 0 */
                         num_chunks = 0;
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
                         return;

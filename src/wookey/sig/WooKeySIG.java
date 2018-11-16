@@ -123,9 +123,14 @@ public class WooKeySIG extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
                         return;
                 }
-		/* This instruction does not have data */
+		/* First, we close any previous signing session ... */
+		close_sign_session();
+                /* This instruction expects data: 
+                 * Header = magic on 4 bytes || partition type on 4 bytes || version on 4 bytes || len of data after the header on 4 bytes || siglen on 4 bytes
+                 * + MAX_CHUNK_SIZE(4 bytes) + SIG = (5*4) + 4 + 64
+                 */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-                if(data_len != 0){
+                if(data_len != (short)((5*4) + 4 + 64)){
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
 			return;
 		}
@@ -136,13 +141,14 @@ public class WooKeySIG extends Applet implements ExtendedLength
                         return;
                 }
 		else{
-			/* We return our singing session IV */
+			/* We get our signing session IV */
                         random.generateData(sign_session_IV, (short) 0, (short) sign_session_IV.length);
-			Util.arrayCopyNonAtomic(sign_session_IV, (short) 0, W.data, (short) 0, (short) sign_session_IV.length);
-			/* Compute the HMAC of signing session IV using our secret key */
+			/* Compute the HMAC of the data using our secret key */
 			hmac_ctx.hmac_init(Keys.MasterSecretKey);
+			hmac_ctx.hmac_update(W.data, (short) 0, (short) data_len);
 			hmac_ctx.hmac_update(sign_session_IV, (short) 0, (short) sign_session_IV.length);
 			hmac_ctx.hmac_finalize(W.data, (short) sign_session_IV.length);
+			Util.arrayCopyNonAtomic(sign_session_IV, (short) 0, W.data, (short) 0, (short) sign_session_IV.length);
 			short hmac_len = hmac_ctx.hmac_len();
 			/* We are unlocked, update our local state */
 			wookeysig_state[0] = (byte)0xff;
@@ -161,23 +167,18 @@ public class WooKeySIG extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
                         return;
                 }
-                short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-		/* Check if a signing session is already opened */
-		if(is_sign_session_opened() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
-                        return;
-		}
-		/* First, we close the signing session before performing the crypto part */
+		/* First, we close any previous signing session since signing is the first action one should perform ... */
 		close_sign_session();
+                short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 if(data_len != 32){
                         /* We should receive data in this command, and the size should be exactly 32 bytes (size of a SHA-256 hash) */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x03);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
                         return;
                 }
 		else{
