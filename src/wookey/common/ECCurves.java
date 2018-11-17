@@ -104,6 +104,52 @@ public class ECCurves {
 		initialize_eeprom();
 	}
 
+	public static short get_EC_sig_len(byte[] LibECCparams){
+		/* Get the curve we must use from the LibECCparams.
+		 */
+		byte asked_curve = NONE;
+		/* Parse the two bytes providing the curve and the algoithm. We only accept
+		 * FRP256V1/BRAINPOOLP256R1/SECP256R1 for the curves and ECDSA for the signing
+		 * algorithm.
+		 * On the libecc side, we have ECDSA = 1, FRP256V1=1, BRAINPOOLP256R1=8, SECP256R1=4.
+		 */
+		if(LibECCparams.length != 2){
+			CryptoException.throwIt(CryptoException.INVALID_INIT);
+		}
+		/* Byte 0 is the signing algorithm type (only ECDSA supported) */
+		if(LibECCparams[0] != 1){
+			CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+		}
+		switch(LibECCparams[1]){
+			case 1:
+				asked_curve = FRP256V1;
+				break;
+			case 4:
+				asked_curve = SECP256R1;
+				break;
+			case 8:
+				asked_curve = BRAINPOOLP256R1;
+				break;
+			default:
+				asked_curve = NONE;
+				break;
+		}	
+
+		switch(asked_curve){
+			case FRP256V1:
+				return 64;
+			case BRAINPOOLP256R1:
+				return 64;
+			case SECP256R1:
+				return 64;
+			default:
+				CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+				break;
+		}
+
+		return 0;
+	}
+
 	public void initialize_EC_key_pair_context(byte[] PrivKeyBuf, boolean priv_transient, byte[] PubKeyBuf, ECKeyPair kp){
 		if(priv_transient == true){
 			try {

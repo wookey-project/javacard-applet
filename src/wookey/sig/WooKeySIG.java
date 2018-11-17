@@ -130,7 +130,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
                  * + MAX_CHUNK_SIZE(4 bytes) + SIG = (5*4) + 4 + 64
                  */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-                if(data_len != (short)((5*4) + 4 + 64)){
+                if(data_len != (short)((5*4) + 4 + ECCurves.get_EC_sig_len(Keys.LibECCparams))){
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
 			return;
 		}
@@ -141,12 +141,13 @@ public class WooKeySIG extends Applet implements ExtendedLength
                         return;
                 }
 		else{
-			/* We get our signing session IV */
+			/* We generate our signing session IV */
                         random.generateData(sign_session_IV, (short) 0, (short) sign_session_IV.length);
 			/* Compute the HMAC of the data using our secret key */
 			hmac_ctx.hmac_init(Keys.MasterSecretKey);
-			hmac_ctx.hmac_update(W.data, (short) 0, (short) data_len);
+			hmac_ctx.hmac_update(W.data, (short) 0, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)));
 			hmac_ctx.hmac_update(sign_session_IV, (short) 0, (short) sign_session_IV.length);
+			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), (short) ECCurves.get_EC_sig_len(Keys.LibECCparams));
 			hmac_ctx.hmac_finalize(W.data, (short) sign_session_IV.length);
 			Util.arrayCopyNonAtomic(sign_session_IV, (short) 0, W.data, (short) 0, (short) sign_session_IV.length);
 			short hmac_len = hmac_ctx.hmac_len();
@@ -155,7 +156,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 			wookeysig_state[1] = (byte)0xff;
 			/* Initialize total number of chunk to 0 */
 			num_chunks = 0;
-			/* We return our session IV and its MAC as response data */
+			/* We return our session IV and the MAC as response data */
 	                W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) (sign_session_IV.length + hmac_len), (byte) 0x90, (byte) 0x00);
 			return;
 		}
