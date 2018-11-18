@@ -464,10 +464,11 @@ public class WooKey
 			return;
 		}
 		try{
+			/* Preincrement the failed attemps to limit tearing/fault attacks */
+			sc_failed_attempts++;
 			schannel.secure_channel_init(apdu, data);
 		}
 		catch(Exception e){
-			sc_failed_attempts++;
 			data[0] = (byte) ((short)(sc_max_failed_attempts - sc_failed_attempts) >> 8);
 			data[1] = (byte) ((sc_max_failed_attempts - sc_failed_attempts) & 0xff);
 			send_error(apdu, data, (short) 0, (short) 2, (byte) ins, (byte) 0x00);
