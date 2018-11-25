@@ -28,8 +28,8 @@ public class Aes {
 	private byte[] tmp = null;
 
 	protected Aes(short key_len, byte asked_mode){
-		iv = JCSystem.makeTransientByteArray((short) AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
-		last_block = JCSystem.makeTransientByteArray((short) AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
+		iv = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
+		last_block = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		if(AES_CTR_IMPLEMENTATION == (byte) 1){
 			tmp = JCSystem.makeTransientByteArray((short) 255, JCSystem.CLEAR_ON_DESELECT);
 		}
@@ -49,39 +49,23 @@ public class Aes {
 			switch(key_len){
 				case 16:
 					key_builder = KeyBuilder.LENGTH_AES_128;
-					switch(asked_mode){
-						case ECB:
-						case CTR:
-							cipher_instance = Cipher.ALG_AES_BLOCK_128_ECB_NOPAD;
-							break;
-						case CBC:
-							cipher_instance = Cipher.ALG_AES_BLOCK_128_CBC_NOPAD;
-							break;
-					}
 					break;
 				case 24:
 					key_builder = KeyBuilder.LENGTH_AES_192;
-					switch(asked_mode){
-						case ECB:
-						case CTR:
-							cipher_instance = Cipher.ALG_AES_BLOCK_192_ECB_NOPAD;
-							break;
-						case CBC:
-							cipher_instance = Cipher.ALG_AES_BLOCK_192_CBC_NOPAD;
-							break;
-					}
 					break;
 				case 32:
 					key_builder = KeyBuilder.LENGTH_AES_256;
-					switch(asked_mode){
-						case ECB:
-						case CTR:
-							cipher_instance = Cipher.ALG_AES_BLOCK_256_ECB_NOPAD;
-							break;
-						case CBC:
-							cipher_instance = Cipher.ALG_AES_BLOCK_256_CBC_NOPAD;
-							break;
-					}
+					break;
+				default:
+					CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+			}
+			switch(asked_mode){
+				case ECB:
+				case CTR:
+					cipher_instance = Cipher.ALG_AES_BLOCK_128_ECB_NOPAD;
+					break;
+				case CBC:
+					cipher_instance = Cipher.ALG_AES_BLOCK_128_CBC_NOPAD;
 					break;
 				default:
 					CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -273,7 +257,7 @@ public class Aes {
 							offset = (short) ((short)(offset + 1) % AES_BLOCK_SIZE);
 						}
 						last_offset = offset;
-						return (short)inputlen;
+						return inputlen;
 					}
 					else{
 						short i, bytes, hardware_bytes_to_encrypt;
@@ -285,7 +269,7 @@ public class Aes {
 								bytes++;
 								last_offset++;
 								if(bytes > inputlen){
-									return (short)inputlen;
+									return inputlen;
 								}
 							}
 						}
@@ -303,28 +287,28 @@ public class Aes {
 						}
 						if(hardware_bytes_to_encrypt != 0){
 							for(i = 0; i < (short)(hardware_bytes_to_encrypt / AES_BLOCK_SIZE); i++){
-								Util.arrayCopyNonAtomic(iv, (short) 0, tmp, (short) (i * AES_BLOCK_SIZE), (short) AES_BLOCK_SIZE);
+								Util.arrayCopyNonAtomic(iv, (short) 0, tmp, (short) (i * AES_BLOCK_SIZE), AES_BLOCK_SIZE);
 								increment_iv();
 							}
-							cipherAES.doFinal(tmp, (short) 0, (short) hardware_bytes_to_encrypt, tmp, (short) 0);
-							for(i = 0; i < (short) hardware_bytes_to_encrypt; i++){
+							cipherAES.doFinal(tmp, (short) 0, hardware_bytes_to_encrypt, tmp, (short) 0);
+							for(i = 0; i < hardware_bytes_to_encrypt; i++){
 								output[(short)(outputoffset + i)] = (byte)(input[(short)(inputoffset + i)] ^ tmp[i]);
 							}
 						}
 						if((short)(inputlen - bytes - hardware_bytes_to_encrypt) == 0){
 							last_offset = 0;
-							return (short)inputlen;
+							return inputlen;
 						}
 						if(state == (short)1){
 							// Encrypt our last block 
-							cipherAES.doFinal(iv, (short) 0, (short) AES_BLOCK_SIZE, last_block, (short) 0);
+							cipherAES.doFinal(iv, (short) 0, AES_BLOCK_SIZE, last_block, (short) 0);
 							for(i = 0; i < (short) (inputlen - bytes - hardware_bytes_to_encrypt); i++){
 								output[(short) (outputoffset + bytes + hardware_bytes_to_encrypt + i)] = (byte) (input[(short) (inputoffset + bytes + hardware_bytes_to_encrypt + i)] ^ last_block[i]);
 								last_offset++;
 							}
 							increment_iv();
 						}
-						return (short)inputlen;
+						return inputlen;
 					}
 				default:
 					CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);

@@ -120,7 +120,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 	private void begin_sign_session(APDU apdu, byte ins){
 	        /* The user asks for beginning a signature session, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
 		/* First, we close any previous signing session ... */
@@ -131,13 +131,13 @@ public class WooKeySIG extends Applet implements ExtendedLength
                  */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 if(data_len != (short)((5*4) + 4 + ECCurves.get_EC_sig_len(Keys.LibECCparams))){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
 			return;
 		}
 	        /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
 		else{
@@ -147,7 +147,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 			hmac_ctx.hmac_init(Keys.MasterSecretKey);
 			hmac_ctx.hmac_update(W.data, (short) 0, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)));
 			hmac_ctx.hmac_update(sign_session_IV, (short) 0, (short) sign_session_IV.length);
-			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), (short) ECCurves.get_EC_sig_len(Keys.LibECCparams));
+			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), ECCurves.get_EC_sig_len(Keys.LibECCparams));
 			hmac_ctx.hmac_finalize(W.data, (short) sign_session_IV.length);
 			Util.arrayCopyNonAtomic(sign_session_IV, (short) 0, W.data, (short) 0, (short) sign_session_IV.length);
 			short hmac_len = hmac_ctx.hmac_len();
@@ -165,7 +165,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 	private void sign_fimware_hash(APDU apdu, byte ins){
                 /* The user asks for firmware signature, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
 		/* First, we close any previous signing session since signing is the first action one should perform ... */
@@ -173,13 +173,13 @@ public class WooKeySIG extends Applet implements ExtendedLength
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 if(data_len != 32){
                         /* We should receive data in this command, and the size should be exactly 32 bytes (size of a SHA-256 hash) */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
 		else{
@@ -196,19 +196,19 @@ public class WooKeySIG extends Applet implements ExtendedLength
 		short BN_len = (short) W.schannel.ec_context.p.length;
                 /* The user asks for firmware verification, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 if(data_len != (short)(32 + (2 * BN_len))){
                         /* We should receive data in this command, and the size should be exactly 32 bytes (size of a hash) plus 2 big nums */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
 		else{
@@ -229,36 +229,36 @@ public class WooKeySIG extends Applet implements ExtendedLength
 	private void derive_key(APDU apdu, byte ins){
                 /* The user asks for key derivation, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
 		/* Check if a signing session is already opened */
 		if(is_sign_session_opened() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
 		}
                 if(data_len != 0){
                         /* We should not receive data in this command */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x03);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
                         return;
                 }
 		else{
 			if(sign_session_IV == null){
-                        	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x04);
+                        	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x04);
 				return;
 			}
 			/* Check max chunks */
 			if(num_chunks == MAX_NUM_CHUNKS){
 				/* We have reached the maximum number of chunks allowed for the session */
 				close_sign_session();
-                        	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x05);
+                        	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x05);
 				return;
 			}
 			/* Increment the number of chunks */
@@ -279,19 +279,19 @@ public class WooKeySIG extends Applet implements ExtendedLength
         private void get_sig_type(APDU apdu, byte ins){
                 /* The user asks for the signature length, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
                 /* This instruction does not have data */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 if(data_len != 0){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
                 else{
@@ -349,19 +349,19 @@ public class WooKeySIG extends Applet implements ExtendedLength
 
 		switch (buffer[ISO7816.OFFSET_INS])
 		{
-                        case (byte)TOKEN_INS_BEGIN_SIGN_SESSION:
+                        case TOKEN_INS_BEGIN_SIGN_SESSION:
 	                        begin_sign_session(apdu, TOKEN_INS_BEGIN_SIGN_SESSION);
         	                return;
-                        case (byte)TOKEN_INS_SIGN_FIRMWARE:
+                        case TOKEN_INS_SIGN_FIRMWARE:
 	                        sign_fimware_hash(apdu, TOKEN_INS_SIGN_FIRMWARE);
         	                return;
-                        case (byte)TOKEN_INS_VERIFY_FIRMWARE:
+                        case TOKEN_INS_VERIFY_FIRMWARE:
 	                        verify_fimware_hash(apdu, TOKEN_INS_VERIFY_FIRMWARE);
                                 return;
-	                case (byte)TOKEN_INS_DERIVE_KEY:
+	                case TOKEN_INS_DERIVE_KEY:
         	                derive_key(apdu, TOKEN_INS_DERIVE_KEY);
                 	        return;
-                        case (byte)TOKEN_INS_GET_SIG_TYPE:
+                        case TOKEN_INS_GET_SIG_TYPE:
 	                        get_sig_type(apdu, TOKEN_INS_GET_SIG_TYPE);
         	                return;
 			default:
@@ -373,7 +373,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
                                 }
                                 else{
                                         /* Send unsupported APDU */
-                                        ISOException.throwIt((short) ISO7816.SW_INS_NOT_SUPPORTED);
+                                        ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
                                 }
 		}
 	}

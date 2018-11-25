@@ -98,7 +98,7 @@ public class Hmac {
         public void hmac_update(byte[] indata, short indataoffset, short indatalen){
                 try{
 			/* Update the internal context */
-			md_i.update(indata, (short) indataoffset, (short) indatalen);	
+			md_i.update(indata, indataoffset, indatalen);	
                 }
                 catch(CryptoException exception)
                 {
@@ -134,7 +134,7 @@ public class Hmac {
 			}
 			/* Finalize the input hash */
 			md_i.doFinal(null, (short) 0, (short) 0, dgst_i, (short) 0);
-			md_o.doFinal(dgst_i, (short) 0, (short) dgst_i.length, hmac, (short) hmac_offset);
+			md_o.doFinal(dgst_i, (short) 0, (short) dgst_i.length, hmac, hmac_offset);
 			return md_o.getLength();
                 }
                 catch(CryptoException exception)

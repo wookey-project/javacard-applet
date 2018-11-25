@@ -104,7 +104,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 	public void begin_decrypt_session(APDU apdu, byte ins){
                 /* The user asks for beginning a decryption session, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
 		/* Close any previous decrypt session */
@@ -115,25 +115,25 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 		 */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 if(data_len != (short)((5*4) + 4 + dec_session_IV.length + hmac_ctx.hmac_len() + ECCurves.get_EC_sig_len(Keys.LibECCparams))){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
                 else{
 			/* We compute the HMAC on the received data except the HMAC itself */
                 	hmac_ctx.hmac_init(Keys.MasterSecretKey);
 			hmac_ctx.hmac_update(W.data, (short) 0, (short) (data_len - hmac_ctx.hmac_len() - ECCurves.get_EC_sig_len(Keys.LibECCparams)));
-			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), (short) ECCurves.get_EC_sig_len(Keys.LibECCparams));
+			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), ECCurves.get_EC_sig_len(Keys.LibECCparams));
 			hmac_ctx.hmac_finalize(W.schannel.working_buffer, (short) 0);
 			/* We compare the computed HMAC with the received one */
 			if(Util.arrayCompare(W.schannel.working_buffer, (short) 0, W.data, (short) (data_len - hmac_ctx.hmac_len() - ECCurves.get_EC_sig_len(Keys.LibECCparams)), hmac_ctx.hmac_len()) != 0){
 				/* HMAC is not OK, return an error */
-                        	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x03);
+                        	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
 				return;
 			}
                         /* HMAC is OK, open the session and return OK */
@@ -151,36 +151,36 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         private void derive_key(APDU apdu, byte ins){
                 /* The user asks for key derivation, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 /* Check if a decryption session is already opened */
                 if(is_decrypt_session_opened() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
                 if(data_len != 0){
                         /* We should not receive data in this command */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x03);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
                         return;
                 }
                 else{
                         if(dec_session_IV == null){
-                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x04);
+                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x04);
                                 return;
                         }
                         /* Check max chunks */
                         if(num_chunks == MAX_NUM_CHUNKS){
                                 /* We have reached the maximum number of chunks allowed for the session */
                                 close_decrypt_session();
-                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x05);
+                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x05);
                                 return;
                         }
                         /* Increment the number of chunks */
@@ -228,10 +228,10 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 
 		switch (buffer[ISO7816.OFFSET_INS])
 		{
-                        case (byte)TOKEN_INS_BEGIN_DECRYPT_SESSION:
+                        case TOKEN_INS_BEGIN_DECRYPT_SESSION:
                                 begin_decrypt_session(apdu, TOKEN_INS_BEGIN_DECRYPT_SESSION);
                                 return;
-                        case (byte)TOKEN_INS_DERIVE_KEY:
+                        case TOKEN_INS_DERIVE_KEY:
                                 derive_key(apdu, TOKEN_INS_DERIVE_KEY);
                                 return;
 			default:
@@ -243,7 +243,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                                 }
                                 else{
                                         /* Send unsupported APDU */
-                                        ISOException.throwIt((short) ISO7816.SW_INS_NOT_SUPPORTED);
+                                        ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
                                 }
 		}
 

@@ -38,19 +38,19 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	private void get_key(APDU apdu, byte ins){
 		/* The user asks to get the master key and its derivative, the secure channel must be initialized */
 		if(W.schannel.is_secure_channel_initialized() == false){
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x00);
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
 			return;
 		}
 		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
 		if(data_len != 0){
 			/* We should not receive data in this command */
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x01);
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
 			return;
 		}
 		/* We check that we are already unlocked */
 		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
 			/* We are not authenticated, ask for an authentication */
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) ins, (byte) 0x02);
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
 			return;
 		}
 		else{
@@ -97,7 +97,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		/* Now handle our specific APDUs */
 		switch (buffer[ISO7816.OFFSET_INS])
 		{
-			case (byte)TOKEN_INS_GET_KEY:
+			case TOKEN_INS_GET_KEY:
 				get_key(apdu, TOKEN_INS_GET_KEY);
 				return;
 			default:
@@ -109,7 +109,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
                                 }
                                 else{
                                         /* Send unsupported APDU */
-                                        ISOException.throwIt((short) ISO7816.SW_INS_NOT_SUPPORTED);
+                                        ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
                                 }
 		}
 

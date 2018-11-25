@@ -4,40 +4,40 @@ import javacard.security.*;
 
 public class SecureChannel {
 	/* Cruve parameters */
-	public static ECCurves ec_context = null;
+	public ECCurves ec_context = null;
 	/* Our key pair */
-	private static ECKeyPair OurKeyPairWrapper = null;
-	private static KeyPair OurKeyPair = null;
-	private static ECPrivateKey OurPrivKey = null;
-	private static ECPublicKey OurPubKey = null;
+	private ECKeyPair OurKeyPairWrapper = null;
+	private KeyPair OurKeyPair = null;
+	private ECPrivateKey OurPrivKey = null;
+	private ECPublicKey OurPubKey = null;
 	/* WooKey public key */
-	private static ECKeyPair WooKeyKeyPairWrapper = null;
-	private static KeyPair WooKeyKeyPair = null;
-	private static ECPublicKey WooKeyPubKey = null;
+	private ECKeyPair WooKeyKeyPairWrapper = null;
+	private KeyPair WooKeyKeyPair = null;
+	private ECPublicKey WooKeyPubKey = null;
 	/* The shared secret (derived from the ECDH) */
-	private static byte[] ECDHSharedSecret = null;
+	private byte[] ECDHSharedSecret = null;
 	/* The secure channel parameters */
-	private static byte[] secure_channel_initialized = null;
-	private static byte[] IV = null;
-	private static byte[] first_IV = null;
-	private static byte[] AES_key = null;
-	private static byte[] HMAC_key = null;
-	private static byte[] PIN_key = null;
+	private byte[] secure_channel_initialized = null;
+	private byte[] IV = null;
+	private byte[] first_IV = null;
+	private byte[] AES_key = null;
+	private byte[] HMAC_key = null;
+	private byte[] PIN_key = null;
 	/* All the necessary buffers whose sizes are known */
-	public static byte[] working_buffer = null; /* this is a scratchpad buffer for operations using temporary memory */
+	public byte[] working_buffer = null; /* this is a scratchpad buffer for operations using temporary memory */
 	/* Various buffers */
-	private static byte[] tmp = null;
-	private static byte[] hmac = null;
+	private byte[] tmp = null;
+	private byte[] hmac = null;
 	private static final byte[] AES_key_prefix = { 'A', 'E', 'S', '_', 'S', 'E', 'S', 'S', 'I', 'O', 'N', '_', 'K', 'E', 'Y' };
 	private static final byte[] HMAC_key_prefix = { 'H', 'M', 'A', 'C', '_', 'S', 'E', 'S', 'S', 'I', 'O', 'N', '_', 'K', 'E', 'Y' };
 	private static final byte[] IV_prefix = { 'S', 'E', 'S', 'S', 'I', 'O', 'N', '_', 'I', 'V' };
 	/* Dynamic PIN key prefix */
-	private static byte[] PIN_KEY_prefix = null;
+	private byte[] PIN_KEY_prefix = null;
 	/* Crypto contexts (note: the ECC contexts are handled by the ECC layer) */
-	private static Hmac hmac_ctx = null;
-	private static Aes aes_ctx = null;
-	private static Aes aes_ctx_cbc = null;
-	private static MessageDigest md = null;
+	private Hmac hmac_ctx = null;
+	private Aes aes_ctx = null;
+	private Aes aes_ctx_cbc = null;
+	private MessageDigest md = null;
 
 	protected SecureChannel(byte[] default_pin, byte[] OurPrivKeyBuf, byte[] OurPubKeyBuf, byte[] WooKeyPubKeyBuf, byte[] LibECCparams)
 	{
@@ -123,7 +123,7 @@ public class SecureChannel {
 		secure_channel_initialized = JCSystem.makeTransientByteArray((short) 2, JCSystem.CLEAR_ON_DESELECT);
 		secure_channel_initialized[0] = secure_channel_initialized[1] = (byte)0x00;
 		working_buffer = JCSystem.makeTransientByteArray((short) 255, JCSystem.CLEAR_ON_DESELECT);
-		ECDHSharedSecret = JCSystem.makeTransientByteArray((short) (BN_len), JCSystem.CLEAR_ON_DESELECT);
+		ECDHSharedSecret = JCSystem.makeTransientByteArray(BN_len, JCSystem.CLEAR_ON_DESELECT);
 		/* AES-128 CTR key */
 		AES_key = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		/* HMAC-SHA-256 key */
@@ -134,7 +134,7 @@ public class SecureChannel {
 		PIN_key = JCSystem.makeTransientByteArray((short) (32), JCSystem.CLEAR_ON_DESELECT);
 		IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		first_IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
-		tmp = JCSystem.makeTransientByteArray((short) (BN_len), JCSystem.CLEAR_ON_DESELECT);
+		tmp = JCSystem.makeTransientByteArray(BN_len, JCSystem.CLEAR_ON_DESELECT);
 	}
 
 	public boolean is_secure_channel_initialized(){
@@ -175,14 +175,14 @@ public class SecureChannel {
 		short apdu_siglen = (short)(2 * BN_len);
 		short apdu_shared_point_len = (short)(3 * BN_len);
 
-        	Util.arrayCopyNonAtomic(buffer, apdu.getOffsetCdata(), data, (short) 0, (short) receivedLen);
+        	Util.arrayCopyNonAtomic(buffer, apdu.getOffsetCdata(), data, (short) 0, receivedLen);
 
 		/* Sanity check on the length */
 		if(receivedLen != (short) (apdu_shared_point_len + apdu_siglen)){
 			CryptoException.throwIt(CryptoException.ILLEGAL_USE);
 		}
 
-		if(ec_context.ecdsa_verify(data, (short) 0, apdu_shared_point_len, data, (short) apdu_shared_point_len, apdu_siglen, working_buffer, WooKeyPubKey) == false){
+		if(ec_context.ecdsa_verify(data, (short) 0, apdu_shared_point_len, data, apdu_shared_point_len, apdu_siglen, working_buffer, WooKeyPubKey) == false){
 			CryptoException.throwIt(CryptoException.ILLEGAL_USE);
 		}
 		/* Compute the shared secret */
@@ -196,16 +196,16 @@ public class SecureChannel {
 			 */
 			md.reset();
 			md.update(AES_key_prefix, (short) 0, (short) AES_key_prefix.length); 
-			md.doFinal(ECDHSharedSecret, (short) 0, (short) secret_len, tmp, (short) 0);
+			md.doFinal(ECDHSharedSecret, (short) 0, secret_len, tmp, (short) 0);
         		Util.arrayCopyNonAtomic(tmp, (short) 0, AES_key, (short) 0, (short) 16);
 			/* HMAC session key */
 			md.reset();
 			md.update(HMAC_key_prefix, (short) 0, (short) HMAC_key_prefix.length); 
-			md.doFinal(ECDHSharedSecret, (short) 0, (short) secret_len, HMAC_key, (short) 0);
+			md.doFinal(ECDHSharedSecret, (short) 0, secret_len, HMAC_key, (short) 0);
 			/* IV */
 			md.reset();
 			md.update(IV_prefix, (short) 0, (short) IV_prefix.length); 
-			md.doFinal(ECDHSharedSecret, (short) 0, (short) secret_len, tmp, (short) 0);
+			md.doFinal(ECDHSharedSecret, (short) 0, secret_len, tmp, (short) 0);
         		Util.arrayCopyNonAtomic(tmp, (short) 0, IV, (short) 0, (short) 16);
 			/* First IV */
         		Util.arrayCopyNonAtomic(IV, (short) 0, first_IV, (short) 0, (short) 16);
@@ -242,11 +242,14 @@ public class SecureChannel {
 			increment_iv();
                 }
         }
+	public short get_max_sc_apdu_len(){
+		return (short)(255 - hmac_ctx.hmac_len());
+	}
 	public short receive_encrypted_apdu(APDU apdu, byte[] outdata){
 	        short receivedLen = apdu.setIncomingAndReceive();
         	byte buffer[] = apdu.getBuffer();
 		short OffsetCdata = apdu.getOffsetCdata();
-		short hmac_len = (short) hmac_ctx.hmac_len();
+		short hmac_len = hmac_ctx.hmac_len();
 
 		if(hmac_len == 0){
 			close_secure_channel();
@@ -274,10 +277,10 @@ public class SecureChannel {
 				ISOException.throwIt((short) 0xAABA);
 			}
 			aes_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
-			aes_ctx.aes(buffer, (short) apdu.getOffsetCdata(), (short) (receivedLen - hmac_len), outdata, (short) 0);
+			aes_ctx.aes(buffer, apdu.getOffsetCdata(), (short) (receivedLen - hmac_len), outdata, (short) 0);
 	                /* Increment the IV by as many blocks as necessary */
-			add_iv((short) ((short) (receivedLen - hmac_len) / (short) Aes.AES_BLOCK_SIZE));
-			hmac_ctx.hmac_update(buffer, (short) apdu.getOffsetCdata(),  (short) (receivedLen - hmac_len));
+			add_iv((short) ((short) (receivedLen - hmac_len) / Aes.AES_BLOCK_SIZE));
+			hmac_ctx.hmac_update(buffer, apdu.getOffsetCdata(),  (short) (receivedLen - hmac_len));
 		}
 		/* Always increment the IV for the next data to send/receive */
 		increment_iv();
@@ -293,7 +296,7 @@ public class SecureChannel {
 		/* Finalize the HMAC */
 		hmac_ctx.hmac_finalize(working_buffer, (short) 0);
 
-		if(Util.arrayCompare(working_buffer, (short) 0, buffer, (short) (receivedLen - hmac_len + OffsetCdata), (short) hmac_len) != 0){
+		if(Util.arrayCompare(working_buffer, (short) 0, buffer, (short) (receivedLen - hmac_len + OffsetCdata), hmac_len) != 0){
 			close_secure_channel();
 			ISOException.throwIt((short) 0xAACC);	
 		}
@@ -311,18 +314,18 @@ public class SecureChannel {
 	public void send_encrypted_apdu(APDU apdu, byte[] indata, short indataoffset, short indatalen, byte sw1, byte sw2){
 		if(is_secure_channel_initialized() == false){
 			/* If the secure channel is not initialized yet, we send an exception with SW1 and SW2 */
-			ISOException.throwIt((short) (((short)sw1 << 8) ^ ((short)sw2)));
+			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 		}
 		if(indata != null){
 			if((short)(indataoffset + indatalen) > indata.length){
 				close_secure_channel();
-				ISOException.throwIt((short) (((short)sw1 << 8) ^ ((short)sw2)));
+				ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 			}
 		}
-		short hmac_len = (short) hmac_ctx.hmac_len();
+		short hmac_len = hmac_ctx.hmac_len();
 		if(hmac_len == 0){
 			close_secure_channel();
-			ISOException.throwIt((short) (((short)sw1 << 8) ^ ((short)sw2)));
+			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 		}
 
 		/* HMAC context */
@@ -330,23 +333,23 @@ public class SecureChannel {
 		/* Prepend the IV when computing the HMAC */
 		hmac_ctx.hmac_update(IV, (short) 0, (short) IV.length);
 		/* Append SW1 and SW2 */
-		tmp[0] = (byte)sw1;
-		tmp[1] = (byte)sw2;
+		tmp[0] = sw1;
+		tmp[1] = sw2;
 		hmac_ctx.hmac_update(tmp, (short) 0, (short) 1);
 		hmac_ctx.hmac_update(tmp, (short) 1, (short) 1);
 		if(indatalen > 0){
 			aes_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
-			aes_ctx.aes(indata, (short) 0, (short) indatalen, working_buffer, (short) 0);
+			aes_ctx.aes(indata, (short) 0, indatalen, working_buffer, (short) 0);
 	                /* Increment the IV by as many blocks as necessary */
-			add_iv((short) ((short) indatalen / (short) Aes.AES_BLOCK_SIZE));
+			add_iv((short) (indatalen / Aes.AES_BLOCK_SIZE));
 			tmp[0] = (byte)indatalen;
 			hmac_ctx.hmac_update(tmp, (short) 0, (short) 1);
-			hmac_ctx.hmac_update(working_buffer, (short) 0, (short) indatalen);
+			hmac_ctx.hmac_update(working_buffer, (short) 0, indatalen);
 		}
 		/* Always increment the IV for the next data to send/receive */
 		increment_iv();
 
-		hmac_ctx.hmac_finalize(working_buffer, (short) indatalen);
+		hmac_ctx.hmac_finalize(working_buffer, indatalen);
 
 		if(apdu.getCurrentState() != APDU.STATE_OUTGOING){
 			apdu.setOutgoing();
@@ -354,7 +357,7 @@ public class SecureChannel {
         	apdu.setOutgoingLength((short) (indatalen + hmac_len));
                 apdu.sendBytesLong(working_buffer, (short) 0, (short) (indatalen + hmac_len));
 		if((sw1 != (byte)0x90) || (sw2 != (byte)0x00)){
-			ISOException.throwIt((short) (((short)sw1 << 8) ^ ((short)sw2)));
+			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 		}
 
 		return;
@@ -395,7 +398,7 @@ public class SecureChannel {
 		/* [RB] FIXME: for now we have DECRYPT here because of masked AES only supporting encryption on
 		 * the other side ... This has to be switched asap */
 		aes_ctx_cbc.aes_init(PIN_key, IV, Aes.DECRYPT);
-		aes_ctx_cbc.aes(input, (short) input_offset, (short) len, output, (short) output_offset);
+		aes_ctx_cbc.aes(input, input_offset, len, output, output_offset);
 	}
 }
 

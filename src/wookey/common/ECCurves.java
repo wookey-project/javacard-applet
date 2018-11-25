@@ -227,15 +227,15 @@ public class ECCurves {
                          */
                         short sp_length = (short) (2 * (indatalen / 3) + 1);
                         working_buffer[0] = 0x04;
-                        Util.arrayCopyNonAtomic(shared_point, (short) indataoffset, working_buffer, (short) 1, (short) (sp_length - 1));
+                        Util.arrayCopyNonAtomic(shared_point, indataoffset, working_buffer, (short) 1, (short) (sp_length - 1));
 
 			/* TODO: Check that the last coordinate is 0x01 in Bignum () */
 
-                        short len = ecdh.generateSecret(working_buffer, (short) 0, (short) sp_length, shared_secret, (short) 0);
+                        short len = ecdh.generateSecret(working_buffer, (short) 0, sp_length, shared_secret, (short) 0);
 
 			/* The ECDH is done, we clean up the ECDH private key since we don't need it anymore ... */
 			Util.arrayFillNonAtomic(working_buffer, (short) 0, (short) working_buffer.length, (byte) 0x0);
-			privKeyECDH.setS(working_buffer, (short) 0, (short) BN_len);
+			privKeyECDH.setS(working_buffer, (short) 0, BN_len);
 
                         /* We override shared_point with our public key, which is d*G */
                         pubKeyECDH.getW(working_buffer, (short) 0);
@@ -273,7 +273,7 @@ public class ECCurves {
 	public short ecdsa_sign(byte[] indata, short indataoffset, short indatalen, byte[] outdata, short outdataoffset, byte[] working_buffer, ECPrivateKey OurPrivKey){
 		try{
 			sigECDSA.init(OurPrivKey, Signature.MODE_SIGN);
-			short structured_sequence_siglen = sigECDSA.sign(indata, (short) indataoffset, (short) indatalen, working_buffer, (short) 0);
+			short structured_sequence_siglen = sigECDSA.sign(indata, indataoffset, indatalen, working_buffer, (short) 0);
 			short r_size = 0;
 			short s_size = 0;
 			short siglen = 0;
@@ -296,14 +296,14 @@ public class ECCurves {
 				 */
 				if(((working_buffer[5] & (byte)0x80) != 0) && (r_size != p.length)){
 					r_size--;
-       		 			Util.arrayCopyNonAtomic(working_buffer, (short) 5, outdata, (short) outdataoffset, (short) r_size);
+       		 			Util.arrayCopyNonAtomic(working_buffer, (short) 5, outdata, outdataoffset, r_size);
 				}
 				else{
-       	 				Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, (short) outdataoffset, (short) r_size);
+       	 				Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, outdataoffset, r_size);
 				}
 			}
 			else{
-       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, (short) outdataoffset, (short) r_size);
+       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, outdataoffset, r_size);
 			}
 			siglen += r_size;
 			if(working_buffer[(short)(4 + working_buffer[3])] != 0x02){
@@ -317,18 +317,18 @@ public class ECCurves {
 				 */
 				if(((working_buffer[(short)(4 + working_buffer[3] + 2 + 1)] & (byte)0x80) != 0) && (s_size != p.length)){
 					s_size--;
-       		 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 3), outdata, (short) (outdataoffset + r_size), (short) s_size);
+       		 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 3), outdata, (short) (outdataoffset + r_size), s_size);
 				}
 				else{
-       	 				Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + r_size), (short) s_size);
+       	 				Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + r_size), s_size);
 				}
 			}
 			else{
-       	 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + r_size), (short) s_size);
+       	 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + r_size), s_size);
 			}
 			siglen += s_size;
 			if(siglen != sigECDSAlen){
-       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 0, outdata, (short) outdataoffset, (short) working_buffer.length);
+       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 0, outdata, outdataoffset, (short) working_buffer.length);
 				siglen = indatalen;
 			}
 			return siglen;
@@ -376,13 +376,13 @@ public class ECCurves {
 				working_buffer[2] = 0x02;
 				working_buffer[3] = (byte)(r_length + 1);
 				working_buffer[4] = 0x00;
-	        		Util.arrayCopyNonAtomic(sigBuf, (short) sigoffset, working_buffer, (short) 5, (short) r_length);
+	        		Util.arrayCopyNonAtomic(sigBuf, sigoffset, working_buffer, (short) 5, r_length);
 				s_offset = (short)(5 + r_length);
 			}
 			else{
 				working_buffer[2] = 0x02;
 				working_buffer[3] = (byte) (r_length);
-	        		Util.arrayCopyNonAtomic(sigBuf, (short) sigoffset, working_buffer, (short) 4, (short) r_length);	
+	        		Util.arrayCopyNonAtomic(sigBuf, sigoffset, working_buffer, (short) 4, r_length);	
 				s_offset = (short)(4 + r_length);
 			}
 			if((sigBuf[(short)(sigoffset + r_length)] & ((byte) 0x80)) == 0x80){
@@ -390,14 +390,14 @@ public class ECCurves {
 				working_buffer[s_offset] = 0x02;
 				working_buffer[(short)(s_offset + 1)] = (byte)(s_length + 1);
 				working_buffer[(short)(s_offset + 2)] = 0x00;
-	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_length), working_buffer, (short) (s_offset + 3), (short) s_length);
+	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_length), working_buffer, (short) (s_offset + 3), s_length);
 			}
 			else{
 				working_buffer[s_offset] = 0x02;
 				working_buffer[(short)(s_offset + 1)] = (byte)(s_length);
-	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_length), working_buffer, (short) (s_offset + 2), (short) s_length);	
+	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_length), working_buffer, (short) (s_offset + 2), s_length);	
 			}
-			return sigECDSA.verify(indata, indataoffset, (short) indatalen, working_buffer, (short) 0, (short) (siglen + 6));
+			return sigECDSA.verify(indata, indataoffset, indatalen, working_buffer, (short) 0, (short) (siglen + 6));
 		}
 		catch(CryptoException exception)
         	{
