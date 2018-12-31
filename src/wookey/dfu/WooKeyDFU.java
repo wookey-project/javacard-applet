@@ -21,10 +21,19 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         private static byte[] wookeydec_state = null;
         /* The session IV */
         private static byte[] dec_session_IV = null;
+        private static byte[] cur_session_IV = null;
 
         /* Counter to limit the global number of chunks in one session */
-        private static short num_chunks = 0;
-        final static short MAX_NUM_CHUNKS = (short)0xffff; 
+        private static short[] last_num_chunk = null;
+        private static short[] session_num_chunk = null;
+        final static short MAX_NUM_CHUNKS = (short)0x7fff; 
+
+	/* [RB] FIXME: we can handle the max number of derived session keys inside de card since
+	 * we have the header with the encrypted content global length. However, this would require
+	 * using 32 bites integers, which is not so straightforward using generic Javacard API.
+	 */
+	/* Save the current maximum number of chunks we get from the length */
+	//private static short[] ; 
 
         /* HMAC contexts */
         private static Hmac hmac_ctx = null;
@@ -45,6 +54,9 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                 wookeydec_state = JCSystem.makeTransientByteArray((short) 2, JCSystem.CLEAR_ON_DESELECT);
                 wookeydec_state[0] = wookeydec_state[1] = 0;
                 dec_session_IV = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
+                cur_session_IV = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
+		last_num_chunk = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
+		session_num_chunk = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
                 /* Our working temporary buffer */
                 tmp = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
 
@@ -66,12 +78,12 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         }
 
         /* Function that makes the chunk session IV evolve. We use a simple inrementation of the IV at each step. */
-        private void next_iv(){
-                short i;
+	private void inc_iv(){
+	        short i;
                 byte end = 0, dummy = 0;
-                for(i = (short)dec_session_IV.length; i > 0; i--){
+                for(i = (short)cur_session_IV.length; i > 0; i--){
                         if(end == 0){
-                                if((++dec_session_IV[(short)(i - 1)] != 0)){
+                                if((++cur_session_IV[(short)(i - 1)] != 0)){
                                         end = 1;
                                 }
                         }
@@ -79,6 +91,13 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                                 dummy++;
                         }
                 }
+	}
+        private void compute_iv(short num_chunk){
+		short i;
+		Util.arrayCopyNonAtomic(dec_session_IV, (short) 0, cur_session_IV, (short) 0, (short) cur_session_IV.length);
+		for(i = 0; i < num_chunk; i++){
+			inc_iv();
+		}
         }
 
         public void close_decrypt_session(){
@@ -89,13 +108,17 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                 wookeydec_state[1] = (byte)0x00;
                 /* Zeroize the IV */
                 Util.arrayFillNonAtomic(dec_session_IV, (short) 0, (short) dec_session_IV.length, (byte) 0);
+                Util.arrayFillNonAtomic(dec_session_IV, (short) 0, (short) cur_session_IV.length, (byte) 0);
+
+                last_num_chunk[0] = 0;
+		session_num_chunk[0] = 0;
 
                 JCSystem.commitTransaction();
         }
 
 
         public boolean is_decrypt_session_opened(){
-                if((wookeydec_state[0] == (byte)0xff) && (wookeydec_state[1] == (byte)0xff)){
+                if((wookeydec_state[0] == (byte)0xaa) && (wookeydec_state[1] == (byte)0x55)){
                         return true;
                 }
                 return false;
@@ -139,10 +162,11 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         /* HMAC is OK, open the session and return OK */
 			/* We can extract our initial decryption IV */
                         Util.arrayCopyNonAtomic(W.data, (short) ((5*4) + 4), dec_session_IV, (short) 0, (short) dec_session_IV.length);
-                        wookeydec_state[0] = (byte)0xff;
-                        wookeydec_state[1] = (byte)0xff;
-                        /* Initialize total number of chunks to 0 */
-                        num_chunks = 0;
+                        wookeydec_state[0] = (byte)0xaa;
+                        wookeydec_state[1] = (byte)0x55;
+                        /* Initialize last num chunk to 0 */
+                        last_num_chunk[0] = 0;
+			session_num_chunk[0] = 0;
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
                         return;
                 }
@@ -160,38 +184,48 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
-                if(data_len != 0){
-                        /* We should not receive data in this command */
+                if(data_len != 2){
+                        /* We should receive data in this command: 2 bytes representing the chunk number */
+                        close_decrypt_session();
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
                 /* We check that we are already unlocked */
                 if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
+                        close_decrypt_session();
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
                         return;
                 }
+                short chunk_num = (short)((W.data[0] << 8) ^ (W.data[1] & 0xff));
+		if((chunk_num < 0) || (chunk_num > MAX_NUM_CHUNKS) || (session_num_chunk[0] > MAX_NUM_CHUNKS)){
+                        close_decrypt_session();
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x04);
+                        return;
+		}
                 else{
-                        if(dec_session_IV == null){
-                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x04);
-                                return;
-                        }
-                        /* Check max chunks */
-                        if(num_chunks == MAX_NUM_CHUNKS){
-                                /* We have reached the maximum number of chunks allowed for the session */
-                                close_decrypt_session();
+                        if((dec_session_IV == null) || (cur_session_IV == null)){
+                        	close_decrypt_session();
                                 W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x05);
                                 return;
                         }
-                        /* Increment the number of chunks */
-                        num_chunks++;
+			session_num_chunk[0]++;
                         Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 0, W.schannel.working_buffer, (short) 0, (short) 16);
                         Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 16, tmp, (short) 0, (short) 16);
                         aes_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
+			/* Compute current session key */
+			if(chunk_num >= last_num_chunk[0]){
+				short i;
+				for(i = 0; i < (short)(chunk_num-last_num_chunk[0]); i++){
+					inc_iv();
+				}
+			}
+			else{
+				compute_iv(chunk_num);
+			}
+			last_num_chunk[0] = chunk_num;
                         /* Encrypt the current IV */
-                        aes_ctx.aes(dec_session_IV, (short) 0, (short) dec_session_IV.length, W.data, (short) 0);
-                        /* Increment the current IV */
-                        next_iv();
+                        aes_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
                         /* Return the derived key */
                         W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) dec_session_IV.length, (byte) 0x90, (byte) 0x00);
                         return;
@@ -210,6 +244,8 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 		byte[] buffer = apdu.getBuffer();
 
 		if (selectingApplet()){
+                        /* Reinitialize */
+			close_decrypt_session();
 			return;
 		}
 

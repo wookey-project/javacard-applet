@@ -101,7 +101,7 @@ public class WooKey
 	/* Self destroy the card */
 	public void self_destroy_card(){
 		/* We destroy all the assets */
-		destroy_card = (byte) 0xff;
+		destroy_card = (byte) 0xaa;
 		Util.arrayFillNonAtomic(Keys.OurPrivKeyBuf, (short) 0, (short) Keys.OurPrivKeyBuf.length, (byte) 0);
 		Util.arrayFillNonAtomic(Keys.EncLocalPetSecretKey, (short) 0, (short) Keys.EncLocalPetSecretKey.length, (byte) 0);
 		Util.arrayFillNonAtomic(Keys.PetName, (short) 0, (short) Keys.PetName.length, (byte) 0);

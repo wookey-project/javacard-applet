@@ -47,7 +47,7 @@ config AUTH_TOKEN_MAX_PIN
 
 config AUTH_TOKEN_MAX_SC
    int "Maximum failed secure channel mounting tries"
-   range 1 65535
+   range 1 32767
    default 10
    ---help---
       Set the maximum failed secure channel mounting tries before
@@ -94,7 +94,7 @@ config DFU_TOKEN_MAX_PIN
 
 config DFU_TOKEN_MAX_SC
    int "Maximum failed secure channel mounting tries"
-   range 1 65535
+   range 1 32767
    default 10
    ---help---
       Set the maximum failed secure channel mounting tries before
@@ -157,7 +157,7 @@ config SIG_TOKEN_MAX_PIN
 
 config SIG_TOKEN_MAX_SC
    int "Maximum failed secure channel mounting tries"
-   range 1 65535
+   range 1 32767
    default 10
    ---help---
       Set the maximum failed secure channel mounting tries before

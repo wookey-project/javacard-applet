@@ -138,7 +138,7 @@ public class SecureChannel {
 	}
 
 	public boolean is_secure_channel_initialized(){
-		if((secure_channel_initialized[0] == (byte)0xff) && (secure_channel_initialized[1] == (byte)0xff)){
+		if((secure_channel_initialized[0] == (byte)0xaa) && (secure_channel_initialized[1] == (byte)0x55)){
 			return true;
 		}
 		return false;
@@ -147,8 +147,8 @@ public class SecureChannel {
 	private void set_secure_channel_opened(){
 		/* Make this a transaction */
                 JCSystem.beginTransaction();
-		secure_channel_initialized[0] = (byte)0xff;
-		secure_channel_initialized[1] = (byte)0xff;	
+		secure_channel_initialized[0] = (byte)0xaa;
+		secure_channel_initialized[1] = (byte)0x55;	
 		JCSystem.commitTransaction();
 		return;
 	}
