@@ -88,8 +88,6 @@ public class WooKeySIG extends Applet implements ExtendedLength
                 }
         }
 
-	/* Function that makes the chunk session IV evolve. We use a simple inrementation of the IV at each step. */
-
         /* Function that makes the chunk session IV evolve. We use a simple inrementation of the IV at each step. */
         private void inc_iv(){
                 short i;
@@ -168,6 +166,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), ECCurves.get_EC_sig_len(Keys.LibECCparams));
 			hmac_ctx.hmac_finalize(W.data, (short) sign_session_IV.length);
 			Util.arrayCopyNonAtomic(sign_session_IV, (short) 0, W.data, (short) 0, (short) sign_session_IV.length);
+			Util.arrayCopyNonAtomic(sign_session_IV, (short) 0, cur_session_IV, (short) 0, (short) cur_session_IV.length);
 			short hmac_len = hmac_ctx.hmac_len();
 			/* We are unlocked, update our local state */
 			wookeysig_state[0] = (byte)0xaa;

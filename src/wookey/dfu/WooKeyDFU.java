@@ -162,6 +162,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         /* HMAC is OK, open the session and return OK */
 			/* We can extract our initial decryption IV */
                         Util.arrayCopyNonAtomic(W.data, (short) ((5*4) + 4), dec_session_IV, (short) 0, (short) dec_session_IV.length);
+                        Util.arrayCopyNonAtomic(W.data, (short) ((5*4) + 4), cur_session_IV, (short) 0, (short) cur_session_IV.length);
                         wookeydec_state[0] = (byte)0xaa;
                         wookeydec_state[1] = (byte)0x55;
                         /* Initialize last num chunk to 0 */
