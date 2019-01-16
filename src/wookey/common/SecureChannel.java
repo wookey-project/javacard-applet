@@ -395,9 +395,7 @@ public class SecureChannel {
 		md.update(first_IV, (short) 0, (short) first_IV.length);
 		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
 		/* AES-128 CBC encrypt */
-		/* [RB] FIXME: for now we have DECRYPT here because of masked AES only supporting encryption on
-		 * the other side ... This has to be switched asap */
-		aes_ctx_cbc.aes_init(PIN_key, IV, Aes.DECRYPT);
+		aes_ctx_cbc.aes_init(PIN_key, IV, Aes.ENCRYPT);
 		aes_ctx_cbc.aes(input, input_offset, len, output, output_offset);
 	}
 }
