@@ -28,8 +28,12 @@ public class ECCurves {
 	private KeyAgreement ecdh = null;
 
         /* ECDH keypair */
-	/* TODO: We would want to make this key *transient*, but this is
-         * unfortunately not possible (at least with the tested cards ...).
+	/* NOTE: We would want to make this key *transient*, but this is
+         * unfortunately not possible on all cards (for instance, NXP JCOP cards
+	 * perform an exception when trying to create such asymmetric transient keys ...).
+	 * In order to be able to do it on compatible cards, we use a try and except paradigm:
+	 * we try to create such keys as transient in RAM, and if not possible we create them as
+	 * non transient in EEPROM.
 	 */
 	private ECKeyPair kpECDHWrapper = null;
         private KeyPair kpECDH = null;
@@ -151,11 +155,19 @@ public class ECCurves {
 	}
 
 	public void initialize_EC_key_pair_context(byte[] PrivKeyBuf, boolean priv_transient, byte[] PubKeyBuf, ECKeyPair kp){
+		/* NOTE: When asked to create a transient private part of the key pair, some javacards throw an exception because
+		 * of a probable lack of support. Hence, we first try to create transient keys, and catch the exception to create non transient
+		 * keys if the first case is not possible.
+		 */
 		if(priv_transient == true){
 			try {
 				kp.PrivKey = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE_TRANSIENT_DESELECT, KeyBuilder.LENGTH_EC_FP_256, true);
 			}
 			catch(CryptoException e){
+                                /* Our card might not support the 'true' flag for 'boolean keyEncryption': this however
+                                 * does not mean that the proprietary layer does not support it ... (see the Javacard spec).
+                                 * For instance JCOP cards throw an exception while the key is still encrypted ...
+                                 */
 				try {
 					kp.PrivKey = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE_TRANSIENT_DESELECT, KeyBuilder.LENGTH_EC_FP_256, false);
 				}
@@ -205,10 +217,17 @@ public class ECCurves {
 		sigECDSA = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
 		ecdh = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN, false);
 		/* ECDH key pair.
-		 * NOTE: We would want to make this key *transient*, but this is
-		 * unfortunately not possible (at least with the tested cards yielding in errors ...).
+		/* NOTE: We would want to make this key *transient*, but this is
+        	 * unfortunately not possible on all cards (for instance, NXP JCOP cards
+		 * perform an exception when trying to create such asymmetric transient keys ...).
+		 * In order to be able to do it on compatible cards, we use a try and except paradigm:
+		 * we try to create such keys as transient in RAM, and if not possible we create them as
+		 * non transient in EEPROM.
 		 */
 		kpECDHWrapper = new ECKeyPair();
+		/* The following initialization tries first and initialization in RAM, and
+		 * fallbacks to EEPROM if not possible ...
+		 */
 		initialize_EC_key_pair_context(null, true, null, kpECDHWrapper);
 		kpECDH = kpECDHWrapper.kp;
 		privKeyECDH = kpECDHWrapper.PrivKey;
@@ -219,6 +238,18 @@ public class ECCurves {
         public short ecdh_shared_secret(byte[] shared_point, short indataoffset, short indatalen, byte[] shared_secret, byte[] working_buffer){
                 try{
 			short BN_len = (short) p.length;
+
+			/* Check that the last coordinate is 0x01 in Bignum () */
+			short i;
+			for(i = (short)(2 * (indatalen / 3)); i < (short)(indatalen-1); i++){
+				if(shared_point[i] != 0x00){
+					CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+				}
+			}
+			if(shared_point[(short)(indatalen-1)] != 0x01){
+				CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+			}
+
                         /* Generate our ECDH private and public parts */
                         kpECDH.genKeyPair();
 
@@ -229,8 +260,6 @@ public class ECCurves {
                         short sp_length = (short) (2 * (indatalen / 3) + 1);
                         working_buffer[0] = 0x04;
                         Util.arrayCopyNonAtomic(shared_point, indataoffset, working_buffer, (short) 1, (short) (sp_length - 1));
-
-			/* TODO: Check that the last coordinate is 0x01 in Bignum () */
 
                         short len = ecdh.generateSecret(working_buffer, (short) 0, sp_length, shared_secret, (short) 0);
 
@@ -278,7 +307,9 @@ public class ECCurves {
 			short r_size = 0;
 			short s_size = 0;
 			short siglen = 0;
-			/* FIXME: this is a lose way of decapsulating (r, s) from the SEQUENCE ASN.1 representation ... */
+			/* TODO: this is a lose way of decapsulating (r, s) from the SEQUENCE ASN.1 representation ...
+			 * This is OK in our specific use case, but a more flexible/robust way should be implemented here.
+			 */
 			if(working_buffer[0] != 0x30){
                         	ISOException.throwIt((short) 0xECE0);	
 			}
@@ -368,7 +399,9 @@ public class ECCurves {
 			 * encapsulating two integers */
 			short r_length = (short) (siglen / 2);
 			short s_length = (short) (siglen / 2);
-			/* FIXME: this is a lose way of encapsulating (r, s), and this will not work for very large integers */
+			/* TODO: this is a lose way of encapsulating (r, s) in ASN.1, and this will not work for very large integers ...
+			 * This is OK in our specific use case, but a more flexible/robust way should be implemented here.
+			 */
 			working_buffer[0] = (byte) 0x30;
 			working_buffer[1] = (byte) (siglen + 4);
 			short s_offset = (short) 0;
