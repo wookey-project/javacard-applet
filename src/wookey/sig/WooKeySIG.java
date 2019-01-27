@@ -23,7 +23,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 	/* HMAC contexts */
 	private static Hmac hmac_ctx = null;
 	/* AES context */
-	private static Aes aes_ctx = null;
+	private static Aes aes_cbc_ctx = null;
 	/* Useful tmp buffer */
 	private static byte[] tmp = null;
 
@@ -53,10 +53,6 @@ public class WooKeySIG extends Applet implements ExtendedLength
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
 	{
-		/* HMAC context */
-		hmac_ctx = new Hmac(MessageDigest.ALG_SHA_256);
-		/* AES context */
-		aes_ctx = new Aes((short)16, Aes.CBC);
 		/* The local variable handling our state */
 		wookeysig_state = JCSystem.makeTransientByteArray((short) 2, JCSystem.CLEAR_ON_DESELECT);
 		wookeysig_state[0] = wookeysig_state[1] = 0;
@@ -284,7 +280,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 			session_num_chunk[0]++;
 			Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 0, W.schannel.working_buffer, (short) 0, (short) 16);
 			Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 16, tmp, (short) 0, (short) 16);
-			aes_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
+			aes_cbc_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
                         /* Compute current session key */
                         if(chunk_num >= last_num_chunk[0]){
                                 short i;
@@ -297,7 +293,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
                         }
                         last_num_chunk[0] = chunk_num;
 			/* Encrypt the current IV */
-			aes_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
+			aes_cbc_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
 			/* Return the derived key */
 	                W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) sign_session_IV.length, (byte) 0x90, (byte) 0x00);
 			return;
@@ -366,6 +362,11 @@ public class WooKeySIG extends Applet implements ExtendedLength
 			SigKeyPair = SigKeyPairWrapper.kp;
 			SigPrivKey = SigKeyPairWrapper.PrivKey;
 			SigPubKey  = SigKeyPairWrapper.PubKey;
+                        /* Get the shared crypto contexts with the secure channel layer. This is done to **save memory**. */
+                        /* HMAC context */
+                        hmac_ctx = W.schannel.hmac_ctx;
+                        /* AES context */
+                        aes_cbc_ctx = W.schannel.aes_cbc_ctx;
 		}
 
 		if(buffer[ISO7816.OFFSET_CLA] != (byte)0x00){

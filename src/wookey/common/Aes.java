@@ -11,7 +11,7 @@ public class Aes {
 	static final byte DECRYPT = 1;
 	static final short AES_BLOCK_SIZE = 16;
 	/* Two variants of the CTR implementation (see below) */
-	private final byte AES_CTR_IMPLEMENTATION = 0;
+	private final boolean USE_AES_CTR_ALT_IMPLEMENTATION = false;
 	/* Current AES mode (ECB, CBC, CTR) */
 	private byte mode;
 	/* Direction */
@@ -30,7 +30,7 @@ public class Aes {
 	protected Aes(short key_len, byte asked_mode){
 		iv = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		last_block = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
-		if(AES_CTR_IMPLEMENTATION == (byte) 1){
+		if(USE_AES_CTR_ALT_IMPLEMENTATION == true){
 			tmp = JCSystem.makeTransientByteArray((short) 255, JCSystem.CLEAR_ON_DESELECT);
 		}
 		try{
@@ -234,7 +234,7 @@ public class Aes {
 					/* Note: we use the update method for CBC to keep this feature at the lower level */
 					return cipherAES.update(input, inputoffset, inputlen, output, outputoffset);
 				case CTR:
-					if(AES_CTR_IMPLEMENTATION == (byte) 0){
+					if(USE_AES_CTR_ALT_IMPLEMENTATION == false){
 						/* NOTE: this seems to be sub-optimal way of performing AES-CTR for big data chunks, since
 						 * we call the hardware coprocessor for each block. An improved way would be to
 						 * call the hardware once for all the counters that we need by preparing them in

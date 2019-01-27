@@ -30,7 +30,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 
 	/* [RB] FIXME: we can handle the max number of derived session keys inside de card since
 	 * we have the header with the encrypted content global length. However, this would require
-	 * using 32 bites integers, which is not so straightforward using generic Javacard API.
+	 * using 32-bit integers, which is not so straightforward using generic Javacard API.
 	 */
 	/* Save the current maximum number of chunks we get from the length */
 	//private static short[] ; 
@@ -38,7 +38,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         /* HMAC contexts */
         private static Hmac hmac_ctx = null;
         /* AES context */
-        private static Aes aes_ctx = null;
+        private static Aes aes_cbc_ctx = null;
         /* Useful tmp buffer */
         private static byte[] tmp = null;
 
@@ -46,10 +46,6 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
 	{
-                /* HMAC context */
-                hmac_ctx = new Hmac(MessageDigest.ALG_SHA_256);
-                /* AES context */
-                aes_ctx = new Aes((short)16, Aes.CBC);
                 /* The local variable handling our state */
                 wookeydec_state = JCSystem.makeTransientByteArray((short) 2, JCSystem.CLEAR_ON_DESELECT);
                 wookeydec_state[0] = wookeydec_state[1] = 0;
@@ -213,7 +209,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 			session_num_chunk[0]++;
                         Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 0, W.schannel.working_buffer, (short) 0, (short) 16);
                         Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 16, tmp, (short) 0, (short) 16);
-                        aes_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
+                        aes_cbc_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
 			/* Compute current session key */
 			if(chunk_num >= last_num_chunk[0]){
 				short i;
@@ -226,7 +222,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 			}
 			last_num_chunk[0] = chunk_num;
                         /* Encrypt the current IV */
-                        aes_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
+                        aes_cbc_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
                         /* Return the derived key */
                         W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) dec_session_IV.length, (byte) 0x90, (byte) 0x00);
                         return;
@@ -252,6 +248,11 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 
 		if(W == null){
 			W = new WooKey(Keys.UserPin, Keys.PetPin, Keys.OurPrivKeyBuf, Keys.OurPubKeyBuf, Keys.WooKeyPubKeyBuf, Keys.LibECCparams, Keys.PetName, Keys.PetNameLength, Keys.max_pin_tries, Keys.max_secure_channel_tries);
+			/* Get the shared crypto contexts with the secure channel layer. This is done to **save memory**. */
+	                /* HMAC context */
+        	        hmac_ctx = W.schannel.hmac_ctx;
+                	/* AES context */
+	                aes_cbc_ctx = W.schannel.aes_cbc_ctx;
 		}
 
 		if(buffer[ISO7816.OFFSET_CLA] != (byte)0x00){

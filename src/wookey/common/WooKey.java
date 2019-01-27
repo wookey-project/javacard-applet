@@ -36,7 +36,7 @@ public class WooKey
 	private byte[] PetName = null;
         private short PetNameLength = 0;
 	/* AES context to handle the local pet key */
-	private Aes aes_ctx = null;
+	private Aes aes_ecb_ctx = null;
 	/* Decrypted local pet key */
 	private byte[] decrypted_local_pet_key = null;
 	private byte[] tmp;
@@ -70,7 +70,7 @@ public class WooKey
 		/* Initialize the secure random source */
                 random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 		/* Initialize the aes context (AES-128 ECB) */
-		aes_ctx = new Aes((short)16, Aes.ECB);
+		aes_ecb_ctx = new Aes((short)16, Aes.ECB);
 		initialize_ram();
 	}
 
@@ -90,11 +90,9 @@ public class WooKey
                  * The > 260 bytes allocation is only here to support clear echo tests of extended APDUs, which is
                  * absolutely not used by our secure channel. It is only here for debug purposes!
                  */
-                //data = JCSystem.makeTransientByteArray((short) 1020, JCSystem.CLEAR_ON_DESELECT);
                 data = JCSystem.makeTransientByteArray((short) 280, JCSystem.CLEAR_ON_DESELECT);
 		/* Decrypted local PET key. This is needed to be able to modify the PET pin */
 		decrypted_local_pet_key = JCSystem.makeTransientByteArray((short) 64, JCSystem.CLEAR_ON_DESELECT);
-		//decrypted_local_pet_key = new byte[64];
 		tmp = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
 	}
 
@@ -172,21 +170,33 @@ public class WooKey
 		}
 		/* Get the real pin length (the PIN is padded to 16 bytes, the last byte represents the size) */
 		if(data_len != 16){
+			byte old_remaining = pin.getTriesRemaining();
 			/* Bad length, decrement and respond an error */
 			try {
-				/* [RB] FIXME: the NullPointerException does not seem to decrement the pin count on the NXP JCOP ...
-				 * contrary to what the Javacard API specification documents
+				/* [RB] NOTE: The NullPointerException does not seem to decrement the pin count on the NXP JCOP ...
+				 * contrary to what the Javacard API specification documents.
+				 * Hence the check of old and new pin.getTriesRemaining().
 				 */
 				pin.check(null, (short) 0, (byte) 0);
 			}
 			catch(Exception e){
 				/* We have forced a NullPointerException to decrement our counter */
 			}
+			/* Handle the case where the NullPointerException did not trigger an decrementation */
+			byte new_remaining = pin.getTriesRemaining();
+			if(old_remaining == new_remaining){
+				/* Force the remaining tries decrementation by presenting a fake pin */
+				pin.check(data, (short)0, (byte)0);
+			}
 			data[0] = pin.getTriesRemaining();
 			schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, ins, (byte) 0x02);
 		}
 		short pin_len = (short)(data[15] & 0x00ff);
-	
+		/* Check pin real length */
+		if((pin_len < 0) || (pin_len > 15)){
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
+			return;
+		}
 		/* We have the pin, check it! */
 		if(pin.check(data, (short) 0, (byte) pin_len) == false){
 			/* Was this the last hope? */
@@ -274,8 +284,8 @@ public class WooKey
 					for(i = 0; i < 4; i++){
 						/* Chunk i */
 						Util.arrayCopyNonAtomic(data, (short) ((short) 16 + (short) (i*16)), tmp, (short) 0, (short) 16);
-						aes_ctx.aes_init(tmp, null, Aes.ENCRYPT);
-						aes_ctx.aes(decrypted_local_pet_key, (short) (i*16), (short) 16, Keys.EncLocalPetSecretKey, (short) (i*16));
+						aes_ecb_ctx.aes_init(tmp, null, Aes.ENCRYPT);
+						aes_ecb_ctx.aes(decrypted_local_pet_key, (short) (i*16), (short) 16, Keys.EncLocalPetSecretKey, (short) (i*16));
 					}
 				}
 
@@ -455,8 +465,8 @@ public class WooKey
 		for(i = 0; i < 4; i++){
 			/* Chunk i */
 			Util.arrayCopyNonAtomic(buffer, (short) ((short) ISO7816.OFFSET_CDATA + (short) (i*16)), tmp, (short) 0, (short) 16);
-			aes_ctx.aes_init(tmp, null, Aes.DECRYPT);
-			aes_ctx.aes(Keys.EncLocalPetSecretKey, (short) (i*16), (short) 16, decrypted_local_pet_key, (short) (i*16));
+			aes_ecb_ctx.aes_init(tmp, null, Aes.DECRYPT);
+			aes_ecb_ctx.aes(Keys.EncLocalPetSecretKey, (short) (i*16), (short) 16, decrypted_local_pet_key, (short) (i*16));
 		}
 		/* Send the decrypted local pet key */
 	        apdu.setOutgoing();

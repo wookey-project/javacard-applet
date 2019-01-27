@@ -34,10 +34,13 @@ public class SecureChannel {
 	/* Dynamic PIN key prefix */
 	private byte[] PIN_KEY_prefix = null;
 	/* Crypto contexts (note: the ECC contexts are handled by the ECC layer) */
-	private Hmac hmac_ctx = null;
-	private Aes aes_ctx = null;
-	private Aes aes_ctx_cbc = null;
+	private Aes aes_ctr_ctx = null;
 	private MessageDigest md = null;
+	/* NOTE: these contexts are 'public' since they can be shared with upper layers, in order to **save memory**
+	 * (this would be cleaner to have them private, but we have constrained ressources here ...)
+	 */
+	public Hmac hmac_ctx = null;
+	public Aes aes_cbc_ctx = null;
 
 	protected SecureChannel(byte[] default_pin, byte[] OurPrivKeyBuf, byte[] OurPubKeyBuf, byte[] WooKeyPubKeyBuf, byte[] LibECCparams)
 	{
@@ -54,8 +57,8 @@ public class SecureChannel {
 
 			/* Initialize all the crypto algorithms contexts */
 			hmac_ctx = new Hmac(MessageDigest.ALG_SHA_256);
-			aes_ctx = new Aes((short)16, Aes.CTR);
-			aes_ctx_cbc = new Aes((short)16, Aes.CBC);
+			aes_ctr_ctx = new Aes((short)16, Aes.CTR);
+			aes_cbc_ctx = new Aes((short)16, Aes.CBC);
 			md = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
 
 			/* Initialize our PIN_key prefix, that is SHA-256 of the default PIN */
@@ -276,8 +279,8 @@ public class SecureChannel {
 				close_secure_channel();
 				ISOException.throwIt((short) 0xAABA);
 			}
-			aes_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
-			aes_ctx.aes(buffer, apdu.getOffsetCdata(), (short) (receivedLen - hmac_len), outdata, (short) 0);
+			aes_ctr_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
+			aes_ctr_ctx.aes(buffer, apdu.getOffsetCdata(), (short) (receivedLen - hmac_len), outdata, (short) 0);
 	                /* Increment the IV by as many blocks as necessary */
 			add_iv((short) ((short) (receivedLen - hmac_len) / Aes.AES_BLOCK_SIZE));
 			hmac_ctx.hmac_update(buffer, apdu.getOffsetCdata(),  (short) (receivedLen - hmac_len));
@@ -338,8 +341,8 @@ public class SecureChannel {
 		hmac_ctx.hmac_update(tmp, (short) 0, (short) 1);
 		hmac_ctx.hmac_update(tmp, (short) 1, (short) 1);
 		if(indatalen > 0){
-			aes_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
-			aes_ctx.aes(indata, (short) 0, indatalen, working_buffer, (short) 0);
+			aes_ctr_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
+			aes_ctr_ctx.aes(indata, (short) 0, indatalen, working_buffer, (short) 0);
 	                /* Increment the IV by as many blocks as necessary */
 			add_iv((short) (indatalen / Aes.AES_BLOCK_SIZE));
 			tmp[0] = (byte)indatalen;
@@ -395,8 +398,8 @@ public class SecureChannel {
 		md.update(first_IV, (short) 0, (short) first_IV.length);
 		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
 		/* AES-128 CBC encrypt */
-		aes_ctx_cbc.aes_init(PIN_key, IV, Aes.ENCRYPT);
-		aes_ctx_cbc.aes(input, input_offset, len, output, output_offset);
+		aes_cbc_ctx.aes_init(PIN_key, IV, Aes.ENCRYPT);
+		aes_cbc_ctx.aes(input, input_offset, len, output, output_offset);
 	}
 }
 

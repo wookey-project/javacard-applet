@@ -204,7 +204,8 @@ public class ECCurves {
 		/* Initialize our ECDSA and ECDH signature contexts */
 		sigECDSA = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
 		ecdh = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN, false);
-		/* ECDH key pair. We would want to make this key *transient*, but this is
+		/* ECDH key pair.
+		 * NOTE: We would want to make this key *transient*, but this is
 		 * unfortunately not possible (at least with the tested cards yielding in errors ...).
 		 */
 		kpECDHWrapper = new ECKeyPair();
