@@ -27,6 +27,10 @@ public class WooKeySIG extends Applet implements ExtendedLength
 	/* Useful tmp buffer */
 	private static byte[] tmp = null;
 
+        /* [RB] FIXME/TODO: we can handle the max number of derived session keys inside de card since
+         * we have the header with the encrypted content global length. However, this would require
+         * using 32-bit integers, which is not so straightforward using generic Javacard API.
+         */
 	/* Counter to limit the global number of chunks in one session */
         private static short[] last_num_chunk = null;
         private static short[] session_num_chunk = null;

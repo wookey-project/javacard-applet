@@ -28,12 +28,10 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         private static short[] session_num_chunk = null;
         final static short MAX_NUM_CHUNKS = (short)0x7fff; 
 
-	/* [RB] FIXME: we can handle the max number of derived session keys inside de card since
+	/* [RB] FIXME/TODO: we can handle the max number of derived session keys inside de card since
 	 * we have the header with the encrypted content global length. However, this would require
 	 * using 32-bit integers, which is not so straightforward using generic Javacard API.
 	 */
-	/* Save the current maximum number of chunks we get from the length */
-	//private static short[] ; 
 
         /* HMAC contexts */
         private static Hmac hmac_ctx = null;
