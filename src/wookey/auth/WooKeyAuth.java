@@ -106,6 +106,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
                                         short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                                         /* Send unsupported APDU */
                                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) (ISO7816.SW_INS_NOT_SUPPORTED >> 8), (byte) ISO7816.SW_INS_NOT_SUPPORTED);
+					return;
                                 }
                                 else{
                                         /* Send unsupported APDU */
