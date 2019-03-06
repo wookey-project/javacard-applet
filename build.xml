@@ -5,7 +5,7 @@ file: build.xml
 
 <project basedir="."  name="WooKey-Javacard-Applets">
 
-  <property name="JC303" value="sdks/jc303_kit"/>
+  <property environment="env"/>
 
   <taskdef name="javacard"
            classname="pro.javacard.ant.JavaCard"
@@ -16,7 +16,7 @@ file: build.xml
     <mkdir dir="build_auth"/>
     <javacard>
       <!-- WooKey Authentication Applet -->
-      <cap jckit="${JC303}" aid="45757477747536"
+      <cap jckit="${env.JAVA_SC_SDK}" aid="45757477747536"
            output="build_auth/wookey_auth.cap" sources="src/wookey/tmp/common_auth;src/wookey/auth"
            jca="build_auth/wookey_auth.jca">
         <applet class="wookey_auth.WooKeyAuth" aid="45757477747536417070"/>
@@ -28,7 +28,7 @@ file: build.xml
     <mkdir dir="build_dfu"/>
     <javacard>
       <!-- WooKey DFU Applet -->
-      <cap jckit="${JC303}" aid="45757477747537"
+      <cap jckit="${env.JAVA_SC_SDK}" aid="45757477747537"
            output="build_dfu/wookey_dfu.cap" sources="src/wookey/tmp/common_dfu;src/wookey/dfu"
            jca="build_dfu/wookey_dfu.jca">
         <applet class="wookey_dfu.WooKeyDFU" aid="45757477747536417071"/>
@@ -40,7 +40,7 @@ file: build.xml
     <mkdir dir="build_sig"/>
     <javacard>
       <!-- WooKey SIG Applet -->
-      <cap jckit="${JC303}" aid="45757477747538"
+      <cap jckit="${env.JAVA_SC_SDK}" aid="45757477747538"
            output="build_sig/wookey_sig.cap" sources="src/wookey/tmp/common_sig;src/wookey/sig"
            jca="build_sig/wookey_sig.jca">
         <applet class="wookey_sig.WooKeySIG" aid="45757477747536417072"/>
