@@ -9,3 +9,5 @@ build_sig/wookey_sig.jca
 src/wookey/auth/Keys.java
 src/wookey/dfu/Keys.java
 src/wookey/sig/Keys.java
+ant-javacard.jar
+gp.jar
