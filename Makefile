@@ -79,7 +79,7 @@ ifeq ("$(USE_DIFFERENT_PHYSICAL_TOKENS)","y")
 		$(SILENT_MAKE) -f $(THIS_FILE) push_auth; \
 	fi;
 endif
-	@java -jar $(APPLET_PATH)/gp.jar --reinstall $(APPLET_PATH)/build_auth/wookey_auth.cap;
+	@java -jar $(APPLET_PATH)/gp.jar --force --install $(APPLET_PATH)/build_auth/wookey_auth.cap;
 
 push_dfu:
 	@CHECK_CARD=`java -jar $(APPLET_PATH)/gp.jar -i 2>/dev/null | grep ATR`; \
@@ -105,7 +105,7 @@ ifeq ("$(USE_DIFFERENT_PHYSICAL_TOKENS)","y")
 		$(SILENT_MAKE) -f $(THIS_FILE) push_dfu; \
 	fi;
 endif
-	@java -jar $(APPLET_PATH)/gp.jar --reinstall $(APPLET_PATH)/build_dfu/wookey_dfu.cap;
+	@java -jar $(APPLET_PATH)/gp.jar --force --install $(APPLET_PATH)/build_dfu/wookey_dfu.cap;
 
 push_sig:
 ifeq ("$(USE_SIG_TOKEN)","USE_SIG_TOKEN")
@@ -132,7 +132,7 @@ ifeq ("$(USE_DIFFERENT_PHYSICAL_TOKENS)","y")
 		$(SILENT_MAKE) -f $(THIS_FILE) push_sig; \
 	fi;
 endif
-	@java -jar $(APPLET_PATH)/gp.jar --reinstall $(APPLET_PATH)/build_sig/wookey_sig.cap;
+	@java -jar $(APPLET_PATH)/gp.jar --force --install $(APPLET_PATH)/build_sig/wookey_sig.cap;
 else
 	@echo "Sorry, the signature applet does not exist since the user asked to use local firmware signature/encryption ...";
 endif
