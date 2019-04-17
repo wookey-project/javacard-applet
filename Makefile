@@ -1,7 +1,7 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 SILENT_MAKE := $(MAKE) --no-print-directory
 PROJ_FILES=../
-include ../Makefile.conf
+include ../m_config.mk
 
 APPLET_PATH=$(PROJ_FILES)/javacard/applet/
 APPLET_SRC_PATH=$(APPLET_PATH)/src
