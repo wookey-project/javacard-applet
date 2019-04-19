@@ -1,5 +1,11 @@
 menu "Secure tokens configuration"
 
+config APPLETS
+  bool
+  default y
+  select EXT_GP_PRO
+  select EXT_ANT_JAVACARD
+
 config USE_DIFFERENT_PHYSICAL_TOKENS
   bool "Use a dedicated (different) physical smartcard for each token type (AUTH/DFU/<SIG>)"
   default y
@@ -9,10 +15,10 @@ config USE_DIFFERENT_PHYSICAL_TOKENS
   used to differentiate the token type (also ensuring security isolation).
   For enhanced security, it is strongly advised to use different physical smartcards
   for each token role.
- 
+
 menu "AUTH token"
 config AUTH_TOKEN_PET_PIN
-   int "Pet PIN" 
+   int "Pet PIN"
    default 1234
    ---help---
       Set the PIN to identify the token using predefined sentence
@@ -25,7 +31,7 @@ config AUTH_TOKEN_PET_NAME
    ---help---
       Sentence to provide confidence to the user in identifying
       the token before sending her unlocking PIN. This prevents
-      PIN stealing scenarios with trojan tokens. 
+      PIN stealing scenarios with trojan tokens.
       NOTE: this sentence can be changed in production
 
 config AUTH_TOKEN_USER_PIN
@@ -59,7 +65,7 @@ endmenu
 
 menu "DFU token"
 config DFU_TOKEN_PET_PIN
-   int "Pet PIN" 
+   int "Pet PIN"
    default 1234
    ---help---
       Set the PIN to identify the token using predefined sentence
@@ -72,7 +78,7 @@ config DFU_TOKEN_PET_NAME
    ---help---
       Sentence to provide confidence to the user in identifying
       the token before sending her unlocking PIN. This prevents
-      PIN stealing scenarios with trojan tokens. 
+      PIN stealing scenarios with trojan tokens.
       NOTE: this sentence can be changed in production
 
 config DFU_TOKEN_USER_PIN
@@ -118,11 +124,11 @@ config USE_SIG_TOKEN
   string
   default "USE_SIG_TOKEN" if USE_SIG_TOKEN_BOOL
   default "NO_SIG_TOKEN" if !USE_SIG_TOKEN_BOOL
-  
+
 menu "SIG token"
 depends on USE_SIG_TOKEN_BOOL
 config SIG_TOKEN_PET_PIN
-   int "Pet PIN" 
+   int "Pet PIN"
    default 1234
    ---help---
       Set the PIN to identify the token using predefined sentence
@@ -135,7 +141,7 @@ config SIG_TOKEN_PET_NAME
    ---help---
       Sentence to provide confidence to the user in identifying
       the token before sending her unlocking PIN. This prevents
-      PIN stealing scenarios with trojan tokens. 
+      PIN stealing scenarios with trojan tokens.
       NOTE: this sentence can be changed in production
 
 config SIG_TOKEN_USER_PIN
@@ -178,4 +184,4 @@ config LOCAL_PASSWORD
      smartcard/token), such attacks are of concern.
      WARNING: this is less safe than using a dedicated SIG token!
 
-endmenu 
+endmenu
