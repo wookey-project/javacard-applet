@@ -127,7 +127,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 		/* Close any previous decrypt session */
 		close_decrypt_session();
                 /* This instruction expects data: 
-		 * Header = magic on 4 bytes || partition type on 4 bytes || version on 4 bytes || len of data after the header on 4 bytes || siglen on 4 bytes
+		 * Header = magic on 4 bytes ||partition type on 4 bytes ||version on 4 bytes || len of data after the header on 4 bytes ||siglen on 4 bytes
 		 * + MAX_CHUNK_SIZE(4 bytes) + IV + HMAC + SIG = (5*4) + 4 + 16 + 32 + 64
 		 */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);

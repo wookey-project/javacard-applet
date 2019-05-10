@@ -142,7 +142,7 @@ public class WooKeySIG extends Applet implements ExtendedLength
 		/* First, we close any previous signing session ... */
 		close_sign_session();
                 /* This instruction expects data: 
-                 * Header = magic on 4 bytes || partition type on 4 bytes || version on 4 bytes || len of data after the header on 4 bytes || siglen on 4 bytes
+                 * Header = magic on 4 bytes ||partition type on 4 bytes ||version on 4 bytes || len of data after the header on 4 bytes ||siglen on 4 bytes
                  * + MAX_CHUNK_SIZE(4 bytes) + SIG = (5*4) + 4 + 64
                  */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
