@@ -1,0 +1,5 @@
+Please get the appropriate JavaCard SDKs (for your card) and put them in this folder.
+
+You can get the SDKs from here:
+
+https://github.com/martinpaljak/oracle_javacard_sdks
