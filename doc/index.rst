@@ -24,7 +24,7 @@ when designing security solutions: they are robust against a wide variety of
 advanced attack scenarios.
 
 For the WooKey project, we have validated our JavaCard applets on an EAL 4+
-NXP JCOP J3D081 (https://www.motechno.com/buy/j3d081-dual-interface-javacard-3-0-1/).
+NXP JCOP J3D081 (https://www.fi.muni.cz/~xsvenda/jcalgtest/run_time/NXPJCOPJ3D081.html).
 This JavaCard is dual interface (contact and contacless), is JavaCard 3.0.1 and
 GlobalPlatform 2.2 compliant, and is EAL 4+ certified. The public
 certification report can be found here:
