@@ -245,8 +245,13 @@ public class SecureChannel {
 			increment_iv();
                 }
         }
-	public short get_max_sc_apdu_len(){
+	public short get_max_sc_apdu_recv_len(){
+		/* Maximum receive size is Lc max = 255 minus HMAC size */
 		return (short)(255 - hmac_ctx.hmac_len());
+	}
+	public short get_max_sc_apdu_send_len(){
+		/* Maximum send size is Le max = 256 minux HMAC size */
+		return (short)(256 - hmac_ctx.hmac_len());
 	}
 	public short receive_encrypted_apdu(APDU apdu, byte[] outdata){
 	        short receivedLen = apdu.setIncomingAndReceive();

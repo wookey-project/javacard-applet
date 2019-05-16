@@ -433,9 +433,9 @@ public class WooKey
                         return;
                 }
                 else{
-                	/* This instruction expects a byte containing the size of random data to provide (maximum 255 bytes minus a HMAC size) */
+                	/* This instruction expects a byte containing the size of random data to provide (maximum 256 bytes minus a HMAC size) */
 			short rand_len = (short)(data[0] & 0x00ff);
-			if(rand_len > schannel.get_max_sc_apdu_len()){
+			if(rand_len > schannel.get_max_sc_apdu_send_len()){
         	                schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
                 	        return;
 			}
