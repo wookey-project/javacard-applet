@@ -280,7 +280,7 @@ private key, and ``TOKEN_INS_VERIFY_FIRMWARE`` verifies a signature against a ha
 
 .. note::
   Since in JavaCard the usual ECDSA API includes the hash algorithm, a hash value is actually
-  signed and verified (i.e. we ``ECDSA_SHA256(SHA256(firmware_binary))``is computed and
+  signed and verified (i.e. ``ECDSA_SHA256(SHA256(firmware_binary))`` is computed and
   ``SHA256(firmware_binary)`` is sent in the APDU to the token
 
 Finally, ``TOKEN_INS_GET_SIG_TYPE`` returns an encoding of the Elliptic Curve parameters
