@@ -14,8 +14,8 @@ applet_auth:
 	# Some cleanup
 	rm -f $(APPLET_SRC_PATH)/wookey/auth/Keys.java
 	# Auth
-	cp $(KEYS_DIR)/AUTH/AUTHKeys.java $(APPLET_SRC_PATH)/wookey/auth/Keys.java
 	cp -r $(APPLET_SRC_PATH)/wookey/common $(APPLET_SRC_PATH)/wookey/tmp/common_auth
+	cp $(KEYS_DIR)/AUTH/AUTHKeys.java $(APPLET_SRC_PATH)/wookey/tmp/common_auth/Keys.java
 	sed -i '1 i\package wookey_auth;' $(APPLET_SRC_PATH)/wookey/tmp/common_auth/*.java
 	cd $(APPLET_PATH) && ant build_auth;
 	rm -rf $(APPLET_SRC_PATH)/wookey/tmp/
@@ -26,8 +26,8 @@ applet_dfu:
 	# Some cleanup
 	rm -f  $(APPLET_SRC_PATH)/wookey/dfu/Keys.java
 	# DFU
-	cp $(KEYS_DIR)/DFU/DFUKeys.java  $(APPLET_SRC_PATH)/wookey/dfu/Keys.java
 	cp -r  $(APPLET_SRC_PATH)/wookey/common  $(APPLET_SRC_PATH)/wookey/tmp/common_dfu
+	cp $(KEYS_DIR)/DFU/DFUKeys.java $(APPLET_SRC_PATH)/wookey/tmp/common_dfu/Keys.java
 	sed -i '1 i\package wookey_dfu;'  $(APPLET_SRC_PATH)/wookey/tmp/common_dfu/*.java
 	cd $(APPLET_PATH) && ant build_dfu;
 	rm -rf $(APPLET_SRC_PATH)/wookey/tmp/
@@ -40,8 +40,8 @@ applet_sig:
 	# SIG
 	# NOTE: SIG token being optional, we check for the need to compile it
 	if [ -f $(KEYS_DIR)/SIG/SIGKeys.java ]; then \
-		cp $(KEYS_DIR)/SIG/SIGKeys.java $(APPLET_SRC_PATH)/wookey/sig/Keys.java; \
 		cp -r $(APPLET_SRC_PATH)/wookey/common $(APPLET_SRC_PATH)/wookey/tmp/common_sig; \
+		cp $(KEYS_DIR)/SIG/SIGKeys.java $(APPLET_SRC_PATH)/wookey/tmp/common_sig/Keys.java \
 		sed -i '1 i\package wookey_sig;' $(APPLET_SRC_PATH)/wookey/tmp/common_sig/*java; \
 		cd $(APPLET_PATH) && ant build_sig; \
 	fi;
@@ -136,5 +136,10 @@ endif
 else
 	@echo "Sorry, the signature applet does not exist since the user asked to use local firmware signature/encryption ...";
 endif
+
+# Lock the tokens with dedicated keys
+token_lock:
+	
+
 
 .PHONY: applets
