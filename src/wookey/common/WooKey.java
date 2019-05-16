@@ -421,24 +421,24 @@ public class WooKey
                         schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
                         return;
                 }
-                /* This instruction expects a byte containing the size of random data to provide (maximum 255 bytes minus a HMAC size) */
                 short data_len = schannel.receive_encrypted_apdu(apdu, data);
                 if(data_len != 1){
                         schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
                         return;
                 }
-		if(data_len > schannel.get_max_sc_apdu_len()){
-                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
-                        return;
-		}
                 /* We check that we are already unlocked (pet and user pin) */
                 if((pet_pin.isValidated() == false) || (user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
+                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
                         return;
                 }
                 else{
+                	/* This instruction expects a byte containing the size of random data to provide (maximum 255 bytes minus a HMAC size) */
 			short rand_len = (short)(data[0] & 0x00ff);
+			if(rand_len > schannel.get_max_sc_apdu_len()){
+        	                schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
+                	        return;
+			}
 			try {
 				random.generateData(data, (short) 0, rand_len);
 			}
