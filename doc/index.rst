@@ -94,9 +94,9 @@ The JavaCard applets sources are in the 'javacard/applet/src/wookey'
 folder, and are organized as follows:
 
   * The 'common' subfolder contains the code that is shared among all the applets. It mainly contains the cryptographic libraries (for Elliptic Curves ECDSA and ECDH, AES and HMAC), the class handling the secure channel, and the WooKey class that implement the common instructions (i.e. instructions to authenticate the user, handle the Pet Name, mount the secure channel and so on)
-  * The 'auth' subfolder contains a 'WooKeyAuth' class implementing the AUTH token specific instructions as well as its cryptographic keys
-  * The 'dfu' subfolder contains a 'WooKeyDFU' class implementing the DFU token specific instructions as well as its cryptographic keys
-  * The 'sig' subfolder contains a 'WooKeySIG' class implementing the SIG token specific instructions as well as its cryptographic keys
+  * The 'auth' subfolder contains a 'WooKeyAuth' class implementing the AUTH token specific instructions
+  * The 'dfu' subfolder contains a 'WooKeyDFU' class implementing the DFU token specific instructions
+  * The 'sig' subfolder contains a 'WooKeySIG' class implementing the SIG token specific instructions
 
 .. danger::
   The computer where the firmware and javacard applets are compiled must be a **trusted computer** since very
