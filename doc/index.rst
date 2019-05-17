@@ -64,7 +64,8 @@ https://github.com/martinpaljak/GlobalPlatformPro
   (and then feed them to the GlobalPlatformPro tool)
 
 .. danger::
-  Do not forget to **lock your token** by changing the GlobalPlatform default keys!
+  Do not forget to **lock your token** by changing the GlobalPlatform default keys when
+  you have fully configured your token, i.e. when you switch to production mode.
   Changing the keys is **mandatory** for security reasons: if the keys are not modified,
   a malicious user is able to inject rogue applets and break the security model of
   WooKey
