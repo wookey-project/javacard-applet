@@ -63,6 +63,11 @@ https://github.com/martinpaljak/GlobalPlatformPro
   your provider documentation what are your specific GP keys
   (and then feed them to the GlobalPlatformPro tool)
 
+.. danger::
+  Do not forget to **lock your token** by changing the GlobalPlatform default keys!
+  Changing the keys is **mandatory** for security reasons: if the keys are not modified,
+  a malicious user is able to inject rogue applets and break the security model of
+  WooKey
 
 .. contents::
 
