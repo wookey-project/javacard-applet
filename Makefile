@@ -137,9 +137,5 @@ else
 	@echo "Sorry, the signature applet does not exist since the user asked to use local firmware signature/encryption ...";
 endif
 
-# Lock the tokens with dedicated keys
-token_lock:
-	
-
 
 .PHONY: applets
