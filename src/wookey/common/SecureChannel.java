@@ -259,6 +259,10 @@ public class SecureChannel {
 		short OffsetCdata = apdu.getOffsetCdata();
 		short hmac_len = hmac_ctx.hmac_len();
 
+		if(is_secure_channel_initialized() == false){
+			close_secure_channel();
+			ISOException.throwIt((short) 0xAAAA);
+ 		}
 		if(hmac_len == 0){
 			close_secure_channel();
 			ISOException.throwIt((short) 0xAAAA);	
@@ -322,6 +326,7 @@ public class SecureChannel {
 	public void send_encrypted_apdu(APDU apdu, byte[] indata, short indataoffset, short indatalen, byte sw1, byte sw2){
 		if(is_secure_channel_initialized() == false){
 			/* If the secure channel is not initialized yet, we send an exception with SW1 and SW2 */
+			close_secure_channel();
 			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 		}
 		if(indata != null){
