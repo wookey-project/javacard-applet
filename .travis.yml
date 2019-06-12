@@ -1,0 +1,62 @@
+language: java
+os: linux
+dist:
+    - xenial
+
+
+addons:
+    apt:
+        update: true
+        packages:
+            - repo
+            - git
+            - make
+            - gcc-arm-none-eabi
+            - binutils-arm-none-eabi
+            - python-pip
+            - python3-pip
+            - python-pyscard
+            - python-crypto
+            - openjdk-8-jdk
+            - maven
+            - ant
+            - curl
+            - zip
+            - unzip
+            - bash
+
+# installing dependencies
+before_install:
+    - pip install --user intelhex
+    - sudo pip3 install kconfiglib
+    - curl -s "https://get.sdkman.io" -o /tmp/sdk
+    - chmod +x /tmp/sdk
+    - /tmp/sdk
+    - sudo bash -c ". $HOME/.sdkman/bin/sdkman-init.sh && sdk install maven 3.6.1"
+    - git clone https://github.com/martinpaljak/oracle_javacard_sdks.git /tmp/oracle_sdks
+
+# let's sync and build for disco407, wookey, and build doc
+jobs:
+    include:
+        - stage: javacard_build
+          script:
+              - mkdir build && cd build
+              - export PATH=/usr/local/bin:$PATH
+              - git config --global color.ui true
+              - repo init -u https://github.com/wookey-project/manifest.git -m soft/wookey_nightly.xml && repo sync
+              - echo 'export CROSS_COMPILE=arm-none-eabi-' > setenv.local.sh
+              - echo 'export JAVA_SC_SDK=/tmp/oracle_sdks/jc303_kit' >> setenv.local.sh
+              - if [ "$TRAVIS_EVENT_TYPE" = "pull_request" ]; then cd javacard/applet && git fetch github refs/pull/${TRAVIS_PULL_REQUEST}/head && git checkout FETCH_HEAD; cd ../..; fi
+              - source setenv.sh
+              - make boards/wookey/configs/wookey2_graphic_ada_hs_defconfig
+              - make prepare
+              - make externals
+              - make javacard_compile
+
+notifications:
+  email:
+    recipients:
+      - wookey@ssi.gouv.fr
+    on_success: never
+    on_failure: always
+    on_pull_requests: always
