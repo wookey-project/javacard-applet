@@ -33,7 +33,7 @@ before_install:
     - chmod +x /tmp/sdk
     - /tmp/sdk
     - sudo bash -c ". $HOME/.sdkman/bin/sdkman-init.sh && sdk install maven 3.6.1"
-    - gut clone https://github.com/martinpaljak/oracle_javacard_sdks.git /tmp/oracle_sdks
+    - git clone https://github.com/martinpaljak/oracle_javacard_sdks.git /tmp/oracle_sdks
 
 # let's sync and build for disco407, wookey, and build doc
 jobs:
