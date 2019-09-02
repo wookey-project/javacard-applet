@@ -132,4 +132,10 @@ else
 endif
 
 
+purge_applets:
+	# Purge all the applets in a javacard
+	@java -jar $(APPLET_PATH)/gp.jar --force --uninstall $(APPLET_PATH)/build_auth/wookey_auth.cap;
+	@java -jar $(APPLET_PATH)/gp.jar --force --uninstall $(APPLET_PATH)/build_dfu/wookey_dfu.cap;
+	@java -jar $(APPLET_PATH)/gp.jar --force --uninstall $(APPLET_PATH)/build_sig/wookey_sig.cap;
+
 .PHONY: applets
