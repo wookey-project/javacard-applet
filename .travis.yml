@@ -29,6 +29,10 @@ addons:
 before_install:
     - pip install --user intelhex
     - sudo pip3 install kconfiglib
+    - curl -o /tmp/gnat-community-2018-20180524-arm-elf-linux64-bin http://mirrors.cdn.adacore.com/art/5b0c1227a3f5d7097625478d
+    - chmod +x /tmp/gnat-community-2018-20180524-arm-elf-linux64-bin
+    - git clone https://github.com/AdaCore/gnat_community_install_script.git /tmp/gnat_install
+    - /tmp/gnat_install/install_package.sh /tmp/gnat-community-2018-20180524-arm-elf-linux64-bin /opt/adacore-arm-eabi
     - curl -s "https://get.sdkman.io" -o /tmp/sdk
     - chmod +x /tmp/sdk
     - /tmp/sdk
@@ -41,7 +45,7 @@ jobs:
         - stage: javacard_build
           script:
               - mkdir build && cd build
-              - export PATH=/usr/local/bin:$PATH
+              - export PATH=/opt/adacore-arm-eabi/bin:/usr/local/bin:$PATH
               - git config --global color.ui true
               - repo init -u https://github.com/wookey-project/manifest.git -m soft/wookey_nightly.xml && repo sync
               - echo 'export CROSS_COMPILE=arm-none-eabi-' > setenv.local.sh
