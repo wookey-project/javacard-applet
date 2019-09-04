@@ -54,6 +54,9 @@ public class WooKeySIG extends Applet implements ExtendedLength
         public static final byte TOKEN_INS_VERIFY_FIRMWARE = (byte) 0x33;
         public static final byte TOKEN_INS_GET_SIG_TYPE = (byte) 0x34;
 
+        /* Variable handling initialization */
+        private boolean init_done = false;
+
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
 	{
@@ -354,7 +357,8 @@ public class WooKeySIG extends Applet implements ExtendedLength
 			return;
 		}
 
-		if(W == null){
+		if((W == null) || (init_done == false)){
+                        init_done = false;
 			/* Instantiate WooKey common class */
 			W = new WooKey(Keys.UserPin, Keys.PetPin, Keys.OurPrivKeyBuf, Keys.OurPubKeyBuf, Keys.WooKeyPubKeyBuf, Keys.LibECCparams, Keys.PetName, Keys.PetNameLength, Keys.max_pin_tries, Keys.max_secure_channel_tries);
 			/* Import the firmware signature keys once and for all */
@@ -371,10 +375,15 @@ public class WooKeySIG extends Applet implements ExtendedLength
                         hmac_ctx = W.schannel.hmac_ctx;
                         /* AES context */
                         aes_cbc_ctx = W.schannel.aes_cbc_ctx;
+                        init_done = true;
 		}
 
+                if(init_done == false){
+                        ISOException.throwIt((short) 0x6660);
+                }
+
 		if(buffer[ISO7816.OFFSET_CLA] != (byte)0x00){
-			ISOException.throwIt((short) 0x6660);
+			ISOException.throwIt((short) 0x6661);
 		}
 
                 /* Begin to handle the common APDUs */
