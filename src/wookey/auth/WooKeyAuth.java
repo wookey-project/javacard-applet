@@ -14,6 +14,9 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	/* Instructions specific to the AUTH applet */
 	public static final byte TOKEN_INS_GET_KEY = (byte) 0x10;
 
+	/* Variable handling initialization */
+	private boolean init_done = false;
+
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
 	{
@@ -59,9 +62,9 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			/* Also send SHA-256(ESSIV master key) */
 			md.reset();
 			md.doFinal(Keys.MasterSecretKey, (short) 0, (short) 32, W.data, (short) 32);
-			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 0, (short) 64);	
+			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
 			/* Now send the encrypted APDU */
-			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 64, (byte) 0x90, (byte) 0x00);
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 64, (short) 64, (byte) 0x90, (byte) 0x00);
 			return;
 		}
 	}
@@ -81,12 +84,18 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			return;
 		}
 	
-		if(W == null){
+		if((W == null) || (init_done == false)){
+			init_done = false;
 			W = new WooKey(Keys.UserPin, Keys.PetPin, Keys.OurPrivKeyBuf, Keys.OurPubKeyBuf, Keys.WooKeyPubKeyBuf, Keys.LibECCparams, Keys.PetName, Keys.PetNameLength, Keys.max_pin_tries, Keys.max_secure_channel_tries);
+			init_done = true;
+		}
+
+		if(init_done == false){
+			ISOException.throwIt((short) 0x6660);
 		}
 
 		if(buffer[ISO7816.OFFSET_CLA] != (byte)0x00){
-			ISOException.throwIt((short) 0x6660);
+			ISOException.throwIt((short) 0x6661);
 		}
 		
 		/* Begin to handle the common APDUs */

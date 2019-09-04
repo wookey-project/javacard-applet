@@ -3,7 +3,10 @@ import javacard.security.*;
 
 public class WooKey
 {
-	private static final boolean DEBUG_MODE = true;
+	/* NOTE: the debug mode activates echo tests for the secure channel.
+	 * Should be removed in production.
+	 */
+	private static final boolean DEBUG_MODE = false;
 
 	/* The secure channel instance */
 	public SecureChannel schannel;

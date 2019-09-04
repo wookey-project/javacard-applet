@@ -52,8 +52,6 @@ public class SecureChannel {
 	public void initialize_eeprom(byte[] default_pin, byte[] OurPrivKeyBuf, byte[] OurPubKeyBuf, byte[] WooKeyPubKeyBuf, byte[] LibECCparams){
 		try {
 			/* Initialize our long term variables */
-			/* We do this in a transaction to be safer ... */
-			JCSystem.beginTransaction();
 
 			/* Initialize all the crypto algorithms contexts */
 			hmac_ctx = new Hmac(MessageDigest.ALG_SHA_256);
@@ -79,15 +77,9 @@ public class SecureChannel {
 			ec_context.initialize_EC_key_pair_context(null, false, WooKeyPubKeyBuf, WooKeyKeyPairWrapper);
 			WooKeyKeyPair = WooKeyKeyPairWrapper.kp;
 			WooKeyPubKey  = WooKeyKeyPairWrapper.PubKey;
-
-			/* Commit our transaction */
-			JCSystem.commitTransaction();
 		}
 		catch(CryptoException exception)
         	{
-		    /* Abort our transaction */
-		    JCSystem.abortTransaction();
-		    
         	    switch(exception.getReason()){
 	                case CryptoException.ILLEGAL_USE:
                         	ISOException.throwIt((short) 0x6BD0);
@@ -111,8 +103,6 @@ public class SecureChannel {
         	}
 		catch(Exception e)
 		{
-		    /* Abort our transaction */
-		    JCSystem.abortTransaction();
                     ISOException.throwIt((short) 0x6BD6);
 		}
 
@@ -352,7 +342,7 @@ public class SecureChannel {
 		hmac_ctx.hmac_update(tmp, (short) 1, (short) 1);
 		if(indatalen > 0){
 			aes_ctr_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
-			aes_ctr_ctx.aes(indata, (short) 0, indatalen, working_buffer, (short) 0);
+			aes_ctr_ctx.aes(indata, indataoffset, indatalen, working_buffer, (short) 0);
 	                /* Increment the IV by as many blocks as necessary */
 			add_iv((short) (indatalen / Aes.AES_BLOCK_SIZE));
 			tmp[0] = (byte)indatalen;

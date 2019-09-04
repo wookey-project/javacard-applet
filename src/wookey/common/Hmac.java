@@ -7,8 +7,14 @@ import javacard.security.*;
  * The software implementation optionally uses masking to try limiting some leaks.
  */
 public class Hmac {
+	/* !!WARNING: using native HMAC can provoke unexpected errors on
+	 * cards that do not retur an error when getting an instance, but
+	 * raise an exception when using the instance ... Turn to 'false'
+	 * to fall back to software HMAC if this happens.
+	 */
+	private static final boolean TRY_USE_NATIVE_HMAC = true;
 	/* If we have native HMAC support, use it */
-	private boolean use_native_hmac = true;
+	private boolean use_native_hmac = false;
 	Signature hmac_instance = null;
 	HMACKey hmac_key = null;
 	/* The message digest instances */
@@ -21,6 +27,11 @@ public class Hmac {
 	private byte[] dgst_i;
 	private byte digest = 0;
 	/* For random masking */
+	/* !!WARNING: the ipad/opad masking can be hard on the eeprom initialization, and some
+	 * Javacards won't be compatible with this. Turn to false if you have an error at
+	 * first applet selection when eeprom is initialized by the applet ...
+	 * (masking has been tested to be working on NXP J3D081 smart cards)
+	 */
 	private static final boolean USE_HMAC_MASKING = true;
         private RandomData random = null;
 	private byte[] orig_ipad_masks = null;
@@ -29,33 +40,53 @@ public class Hmac {
 	private byte[] opad_masks = null;
 
 	protected Hmac(byte digest_type){
-		/* Check native HMAC support on the card
-		 * NOTE: HMAC implementation is unfortunately not present on the tested cards ...
-		 */
-		use_native_hmac = true;
-		try {
-			switch(digest_type){
-				case MessageDigest.ALG_SHA_224:
-					CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-					break;
-				case MessageDigest.ALG_SHA_256:
-					hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
-					hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, false);
-					break;
-				case MessageDigest.ALG_SHA_384:
-					hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_384, false);
-					hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, false);
-					break;
-				case MessageDigest.ALG_SHA_512:
-					hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_512, false);
-					hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, false);
-					break;
+		if(TRY_USE_NATIVE_HMAC == true){
+			/* Check native HMAC support on the card
+			 * NOTE: HMAC implementation is unfortunately not present on the tested cards so far ...
+			 * but we prepare its usage on compatible cards!
+			 */
+			use_native_hmac = true;
+			try {
+				switch(digest_type){
+					case MessageDigest.ALG_SHA_224:
+						CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+						break;
+					case MessageDigest.ALG_SHA_256:
+						try {
+							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, true);
+						}
+						catch(CryptoException e){
+							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, false);
+						}
+						hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
+						break;
+					case MessageDigest.ALG_SHA_384:
+						try {
+							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, true);
+						}
+						catch(CryptoException e){
+							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, false);
+						}
+						hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_384, false);
+						break;
+					case MessageDigest.ALG_SHA_512:
+						try {
+							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, true);
+						}
+						catch(CryptoException e){
+							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, false);
+						}
+						hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_512, false);
+						break;
+				}
+			}
+	                catch(CryptoException exception){
+				/* If we got an exception, this means that the card does not have a
+				 * native HMAC support. Fallback to the software one!
+				 */
+				use_native_hmac = false;
 			}
 		}
-                catch(CryptoException exception){
-			use_native_hmac = false;
-		}
-	
 		if(use_native_hmac == false){	
 			if((ipad != null) || (opad != null) || (md_i != null) || (md_o != null)){
 				CryptoException.throwIt(CryptoException.INVALID_INIT);

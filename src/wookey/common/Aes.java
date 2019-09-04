@@ -217,6 +217,13 @@ public class Aes {
         }
 
 	public short aes(byte[] input, short inputoffset, short inputlen, byte[] output, short outputoffset){
+		/* If input and output are the same and size is block aligned (which is always the case here since we do not handle padding),
+		 * they should not overlap ... See the Javacard API documentation for Cipher.update */
+		if(input == output){
+			if((inputoffset < outputoffset) && (outputoffset < (short)(inputoffset + inputlen))){
+				CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+			}
+		}
 		try{
 			if(cipherAES == null){
 				CryptoException.throwIt(CryptoException.UNINITIALIZED_KEY);
@@ -231,8 +238,11 @@ public class Aes {
 					if(inputlen % AES_BLOCK_SIZE != 0){
 						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 					}
-					/* Note: we use the update method for CBC to keep this feature at the lower level */
-					return cipherAES.update(input, inputoffset, inputlen, output, outputoffset);
+					/* !!NOTE: we would want to use the update method for CBC to keep the CBC context at the lower level,
+					 * however the Cipher.update method is buffered and doFinal must be invoked otherwise bad results
+					 * can be still buffered ... (see the Javacard API documentation)
+					 */
+					return cipherAES.doFinal(input, inputoffset, inputlen, output, outputoffset);
 				case CTR:
 					if(USE_AES_CTR_ALT_IMPLEMENTATION == false){
 						/* NOTE: this seems to be sub-optimal way of performing AES-CTR for big data chunks, since

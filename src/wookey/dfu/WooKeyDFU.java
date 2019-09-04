@@ -40,6 +40,8 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         /* Useful tmp buffer */
         private static byte[] tmp = null;
 
+        /* Variable handling initialization */
+        private boolean init_done = false;
 
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
@@ -244,17 +246,24 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 			return;
 		}
 
-		if(W == null){
+		if((W == null) || (init_done == false)){
+                        init_done = false;
 			W = new WooKey(Keys.UserPin, Keys.PetPin, Keys.OurPrivKeyBuf, Keys.OurPubKeyBuf, Keys.WooKeyPubKeyBuf, Keys.LibECCparams, Keys.PetName, Keys.PetNameLength, Keys.max_pin_tries, Keys.max_secure_channel_tries);
 			/* Get the shared crypto contexts with the secure channel layer. This is done to **save memory**. */
 	                /* HMAC context */
         	        hmac_ctx = W.schannel.hmac_ctx;
                 	/* AES context */
 	                aes_cbc_ctx = W.schannel.aes_cbc_ctx;
+                        init_done = true;
+
 		}
 
+                if(init_done == false){
+                        ISOException.throwIt((short) 0x6660);
+                }
+
 		if(buffer[ISO7816.OFFSET_CLA] != (byte)0x00){
-			ISOException.throwIt((short) 0x6660);
+			ISOException.throwIt((short) 0x6661);
 		}
 
                 /* Begin to handle the common APDUs */
