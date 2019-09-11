@@ -262,7 +262,7 @@ public class SecureChannel {
 			ISOException.throwIt((short) 0xAAAA);
 		}
 		/* HMAC context */
-		hmac_ctx.hmac_init(HMAC_key);
+		hmac_ctx.hmac_init(HMAC_key, (short) 0, (short) HMAC_key.length);
 		/* Prepend the IV */
 		hmac_ctx.hmac_update(IV, (short) 0, (short) IV.length);
 		/* Append CLA, INS, P1, P2 */
@@ -332,7 +332,7 @@ public class SecureChannel {
 		}
 
 		/* HMAC context */
-		hmac_ctx.hmac_init(HMAC_key);
+		hmac_ctx.hmac_init(HMAC_key, (short) 0, (short) HMAC_key.length);
 		/* Prepend the IV when computing the HMAC */
 		hmac_ctx.hmac_update(IV, (short) 0, (short) IV.length);
 		/* Append SW1 and SW2 */
@@ -340,7 +340,7 @@ public class SecureChannel {
 		tmp[1] = sw2;
 		hmac_ctx.hmac_update(tmp, (short) 0, (short) 1);
 		hmac_ctx.hmac_update(tmp, (short) 1, (short) 1);
-		if(indatalen > 0){
+		if((indatalen > 0) && (indata != null)){
 			aes_ctr_ctx.aes_init(AES_key, IV, Aes.DECRYPT);
 			aes_ctr_ctx.aes(indata, indataoffset, indatalen, working_buffer, (short) 0);
 	                /* Increment the IV by as many blocks as necessary */

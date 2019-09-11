@@ -7,13 +7,13 @@ import javacard.security.*;
  * The software implementation optionally uses masking to try limiting some leaks.
  */
 public class Hmac {
-	/* !!WARNING: using native HMAC can provoke unexpected errors on
-	 * cards that do not retur an error when getting an instance, but
-	 * raise an exception when using the instance ... Turn to 'false'
-	 * to fall back to software HMAC if this happens.
-	 */
-	private static final boolean TRY_USE_NATIVE_HMAC = true;
 	/* If we have native HMAC support, use it */
+        /* !!WARNING: using native HMAC can provoke unexpected errors on
+         * cards that do not retur an error when getting an instance, but
+         * raise an exception when using the instance ... Turn to 'false'
+         * to fall back to software HMAC if this happens.
+         */
+	private static final boolean TRY_USE_NATIVE_HMAC = true;
 	private boolean use_native_hmac = false;
 	Signature hmac_instance = null;
 	HMACKey hmac_key = null;
@@ -123,9 +123,9 @@ public class Hmac {
 		}
 	}
 
-        public void hmac_init(byte[] key){
+        public void hmac_init(byte[] key, short key_offset, short key_length){
 		if(use_native_hmac == true){
-			hmac_key.setKey(key, (short) 0, (short) key.length);
+			hmac_key.setKey(key, key_offset, key_length);
 			hmac_instance.init(hmac_key, Signature.MODE_SIGN);
 	        	return;
 		}
@@ -147,10 +147,10 @@ public class Hmac {
 					}
 				}
 				
-				if(key.length > ipad.length){
+				if(key_length > ipad.length){
 					/* Key length is > block size */
 					local_md.reset();
-					local_md.update(key, (short) 0, (short) key.length);
+					local_md.update(key, key_offset, key_length);
 					/* [RB] NOTE: some javacard throw an exception when the input buffer is null even if the size is 0 ...
 					 * Hence, we use a dummy value
 					 */
@@ -185,16 +185,16 @@ public class Hmac {
 				else{
 					/* Key length is <= block size */
 					for(i = 0; i < ipad.length; i++){
-						if(i < key.length){
+						if(i < key_length){
 							if(USE_HMAC_MASKING == true){
 								byte msk = (byte)(ipad_masks[i] ^ orig_ipad_masks[i] ^ 0x36);
-								ipad[i] ^= (key[i] ^ msk);
+								ipad[i] ^= (key[(short)(key_offset + i)] ^ msk);
 								msk = (byte)(opad_masks[i] ^ orig_opad_masks[i] ^ 0x5c);
-								opad[i] ^= (key[i] ^ msk);
+								opad[i] ^= (key[(short)(key_offset + i)] ^ msk);
 							}
 							else{
-								ipad[i] = (byte)(key[i] ^ 0x36);
-								opad[i] = (byte)(key[i] ^ 0x5c);
+								ipad[i] = (byte)(key[(short)(key_offset + i)] ^ 0x36);
+								opad[i] = (byte)(key[(short)(key_offset + i)] ^ 0x5c);
 							}
 						}
 						else{

@@ -8,6 +8,8 @@ public class WooKey
 	 */
 	private static final boolean DEBUG_MODE = false;
 
+	public static final byte SW1_WARNING = 0x63;
+
 	/* The secure channel instance */
 	public SecureChannel schannel;
 	/* PIN handling */
@@ -157,7 +159,7 @@ public class WooKey
 	private void echo_test(APDU apdu, byte ins){
 		if(DEBUG_MODE == true){
 			if(schannel.is_secure_channel_initialized() == false){
-				schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+				schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 				return;
 			}
 			short outdata_len = schannel.receive_encrypted_apdu(apdu, data);
@@ -170,12 +172,12 @@ public class WooKey
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		/* The user is sending his pin, the secure channel must be initialized */
 		if(schannel.is_secure_channel_initialized() == false){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		/* We cannot check the user pin before an authentication with the pet pin! */
 		if((pin == user_pin) && (pet_pin.isValidated() == false)){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		/* Get the real pin length (the PIN is padded to 16 bytes, the last byte represents the size) */
@@ -199,13 +201,13 @@ public class WooKey
 				pin.check(data, (short)0, (byte)0);
 			}
 			data[0] = pin.getTriesRemaining();
-			schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, ins, (byte) 0x02);
+			schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, SW1_WARNING, (byte) 0x02);
 			return;
 		}
 		short pin_len = (short)(data[15] & 0x00ff);
 		/* Check pin real length */
 		if((pin_len < 0) || (pin_len > 15)){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x03);
 			return;
 		}
 		/* We have the pin, check it! */
@@ -217,13 +219,13 @@ public class WooKey
 				self_destroy_card();
 				/* Card is blocked ... */
 				data[0] = tries;
-				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, ins, (byte) 0x03);
+				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, SW1_WARNING, (byte) 0x03);
 				return;
 			}
 			else{
 				/* Respond an error with the number of remaining tries */
 				data[0] = tries;
-				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, ins, (byte) 0x04);
+				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, SW1_WARNING, (byte) 0x04);
 				return;
 			}
 		}
@@ -242,13 +244,13 @@ public class WooKey
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		/* The user asks to change his pin, the secure channel must be initialized */
 		if(schannel.is_secure_channel_initialized() == false){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		/* We check that we are already unlocked (both pet pin and user pin presented) */
 		if((pet_pin.isValidated() == false) || (user_pin.isValidated() == false)){
 			/* We are not authenticated, ask for an authentication */
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		else{
@@ -257,14 +259,14 @@ public class WooKey
 			if(pin == user_pin){
 				if(data_len != 16){
 					/* Bad length, respond an error */
-					schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
+					schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x02);
 					return;
 				}
 			}
 			if(pin == pet_pin){
 				if(data_len != (16 + 64)){
 					/* Bad length, respond an error */
-					schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 0, ins, (byte) 0x02);
+					schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 0, SW1_WARNING, (byte) 0x02);
 					return;
 				}
 			}
@@ -272,7 +274,7 @@ public class WooKey
 
 			/* Check new pin real length */
 			if((pin_len < 4) || (pin_len > 15)){
-				schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
+				schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x03);
 				return;
 			}
 			else{
@@ -284,7 +286,7 @@ public class WooKey
 				/* Revalidate the PIN for future usage */
 				if(pin.check(data, (short) 0, (byte) pin_len) == false){
 					JCSystem.abortTransaction();
-					schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x04);
+					schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x04);
 					return;
 				}
 				/* In the case of the PET pin, we also have to re-encrypt our local pet key with the new pin */
@@ -317,13 +319,13 @@ public class WooKey
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		/* The user is sending the new pet name, the secure channel must be initialized */
 		if(schannel.is_secure_channel_initialized() == false){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		/* We check that we are already unlocked (both pet pin and user pin presented) */
 		if((pet_pin.isValidated() == false) || (user_pin.isValidated() == false)){
 			/* We are not authenticated, ask for an authentication */
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		else{
@@ -331,7 +333,7 @@ public class WooKey
 			if(data_len > PetName.length){
 				data[0] = (byte)data_len;
 				data[1] = (byte)PetName.length;
-				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 2, ins, (byte) 0x02);
+				schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 2, SW1_WARNING, (byte) 0x02);
 				return;
 			}
 			/* Modify the PET name */
@@ -347,11 +349,11 @@ public class WooKey
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		/* The user asks to lock the token, the secure channel must be initialized */
 		if(schannel.is_secure_channel_initialized() == false){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		if(data_len != 0){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		/* If the session is not unlocked, we have nothing to do, else we lock it */
@@ -369,11 +371,11 @@ public class WooKey
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		/* The user asks to fully lock the token, the secure channel must be initialized */
 		if(schannel.is_secure_channel_initialized() == false){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		if(data_len != 0){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		/* If the session is not unlocked, we have nothing to do, else we lock it */
@@ -398,16 +400,16 @@ public class WooKey
 	private void get_pet_name(APDU apdu, byte ins){
 		short data_len = schannel.receive_encrypted_apdu(apdu, data);
 		if(schannel.is_secure_channel_initialized() == false){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		if(data_len != 0){
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		if(pet_pin.isValidated() == false){
 			/* We are not authenticated with the PET PIN, ask for an authentication */
-			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
+			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x02);
 			return;
 		}
 		else{
@@ -421,32 +423,32 @@ public class WooKey
 	private void get_random(APDU apdu, byte ins){
 		/* Asking for random needs a secure channel established as well as a user authentication */
                 if(schannel.is_secure_channel_initialized() == false){
-                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
                         return;
                 }
                 short data_len = schannel.receive_encrypted_apdu(apdu, data);
                 if(data_len != 1){
-                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
                         return;
                 }
                 /* We check that we are already unlocked (pet and user pin) */
                 if((pet_pin.isValidated() == false) || (user_pin.isValidated() == false)){
                         /* We are not authenticated, ask for an authentication */
-                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x02);
+                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x02);
                         return;
                 }
                 else{
                 	/* This instruction expects a byte containing the size of random data to provide (maximum 256 bytes minus a HMAC size) */
 			short rand_len = (short)(data[0] & 0x00ff);
 			if(rand_len > schannel.get_max_sc_apdu_send_len()){
-        	                schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x03);
+        	                schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x03);
                 	        return;
 			}
 			try {
 				random.generateData(data, (short) 0, rand_len);
 			}
 			catch(CryptoException exception){
-                        	schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x04);
+                        	schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x04);
 				return;
 			}
                         schannel.send_encrypted_apdu(apdu, data, (short) 0, rand_len, (byte) 0x90, (byte) 0x00);
@@ -478,7 +480,7 @@ public class WooKey
 				self_destroy_card();
 		}
 	        if(schannel.is_secure_channel_initialized() == true){
-                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, ins, (byte) 0x00);
+                        schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x00);
                         return;
                 }
 		/* This instruction expects 64 bytes of data (the PBKDF2 generated from the PET PIN) */
@@ -515,7 +517,7 @@ public class WooKey
 		if(sc_failed_attempts >= sc_max_failed_attempts){
 			/* Self destroy the card ...*/
 			self_destroy_card();
-			send_error(apdu, null, (short) 0, (short) 0, ins, (byte) 0x01);
+			send_error(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
 		try{
@@ -526,7 +528,7 @@ public class WooKey
 		catch(Exception e){
 			data[0] = (byte) ((short)(sc_max_failed_attempts - sc_failed_attempts) >>> 8);
 			data[1] = (byte) ((sc_max_failed_attempts - sc_failed_attempts) & 0xff);
-			send_error(apdu, data, (short) 0, (short) 2, ins, (byte) 0x00);
+			send_error(apdu, data, (short) 0, (short) 2, SW1_WARNING, (byte) 0x00);
 			return;
 		}
 		/* Reset the failed_attempts counter if we have successfully established a channel */

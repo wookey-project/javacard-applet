@@ -26,6 +26,8 @@ public class Aes {
 	private AESKey aesKey = null;
 	/* Tmp buffer */
 	private byte[] tmp = null;
+	/* Counter of encryptions for the same context */
+	short call_counter = 0;
 
 	protected Aes(short key_len, byte asked_mode){
 		iv = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
@@ -111,6 +113,7 @@ public class Aes {
 	public void aes_init(byte[] key, byte[] asked_iv, byte asked_dir){
 		try{
 			last_offset = 0;
+			call_counter = 0;
 			switch(mode){
 				case ECB:
 					if(asked_iv != null){
@@ -225,6 +228,8 @@ public class Aes {
 			}
 		}
 		try{
+			/* Increment our call counter */
+			call_counter++;
 			if(cipherAES == null){
 				CryptoException.throwIt(CryptoException.UNINITIALIZED_KEY);
 			}
@@ -236,6 +241,12 @@ public class Aes {
 					return cipherAES.doFinal(input, inputoffset, inputlen, output, outputoffset);
 				case CBC:
 					if(inputlen % AES_BLOCK_SIZE != 0){
+						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+					}
+					/* For CBC, since we have to use doFinal, we only tolerate a single call to the core AES primitive
+					 * without calling init again (otherwise, this would yield in bad/unexpected results).
+					 */
+					if(call_counter >= 2){
 						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 					}
 					/* !!NOTE: we would want to use the update method for CBC to keep the CBC context at the lower level,
