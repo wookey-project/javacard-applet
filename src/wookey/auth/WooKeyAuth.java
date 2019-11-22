@@ -114,9 +114,10 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			return;
 		}
 		else{
-			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 64);
-			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
-			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 64, (byte) 0x90, (byte) 0x00);
+			//Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 64);
+			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 16);
+			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 16, (short) 16);
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 16, (short) 16, (byte) 0x90, (byte) 0x00);
 			return;
 		}
     }
