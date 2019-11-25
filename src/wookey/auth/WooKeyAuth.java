@@ -83,9 +83,12 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			/* Also send SHA-256(ESSIV master key) */
 			W.schannel.md.reset();
 			W.schannel.md.doFinal(Keys.MasterSecretKey, (short) 0, (short) 32, W.data, (short) 32);
-			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
+                        /* Provision the SD Card passwd */
+			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 64, (short) 16);
+
+			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 80, (short) 80);
 			/* Now send the encrypted APDU */
-			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 64, (short) 64, (byte) 0x90, (byte) 0x00);
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 80, (short) 80, (byte) 0x90, (byte) 0x00);
 			return;
 		}
 		else{
