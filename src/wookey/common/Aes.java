@@ -10,8 +10,12 @@ public class Aes {
 	static final byte ENCRYPT = 0;
 	static final byte DECRYPT = 1;
 	static final short AES_BLOCK_SIZE = 16;
-	/* Two variants of the CTR implementation (see below) */
-	private final boolean USE_AES_CTR_ALT_IMPLEMENTATION = false;
+	/* AES CTR SCA protection (masking and permutation) */
+	/*
+	 * [RB] NOTE: if you have memory "pressure" on your javacard, you can turn
+	 * this off with a 'false' here at the expense of security of course ...
+	 */
+	static final boolean USE_AES_CTR_MASKING = true;
 	/* Current AES mode (ECB, CBC, CTR) */
 	private byte mode;
 	/* Direction */
@@ -27,13 +31,67 @@ public class Aes {
 	/* Tmp buffer */
 	private byte[] tmp = null;
 	/* Counter of encryptions for the same context */
-	short call_counter = 0;
+	private short call_counter = 0;
+	/* Local permutation to protect the CTR xoring */
+	private byte[] ctr_permutation = null;
+	RandomData random = null;
+	/* Local masks to mask CTR xoring */
+	private byte[] ctr_masks = null;	
+
+	/* Knuth shuffles to generate a random permutation */
+	void gen_permutation(byte[] permutation, short size){
+		if(USE_AES_CTR_MASKING == true){
+			if(random == null){
+				/* Initialize the secure random source */
+				random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+			}
+			if((permutation == null) || (tmp == null) || (permutation.length < size) || (size > 255)){
+				CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+			}
+			/* Go shuffle */
+			short i;
+			byte swp;
+			for(i = 0; i < size; i++){
+				permutation[i] = (byte) i;
+			}
+			if(size <= 2){
+				return;
+			}
+			if(tmp.length < (short)(size - 2)){
+				CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+			}
+			random.generateData(tmp, (short) 0, (short) (size - 2));
+			for(i = 0; i <= (short) (size - 2); i++){
+				short j = (short) (size - i);
+				j = (short) (((short)tmp[i] & 0xff) % j);
+				j = (short)(i + j);
+				swp = permutation[i];
+				permutation[i] = permutation[j];
+				permutation[j] = swp;
+			}
+		}
+		return;
+	}
+	/* Generate random masks */
+	void gen_masks(byte[] masks, short size){
+		if(USE_AES_CTR_MASKING == true){
+			if(random == null){
+				/* Initialize the secure random source */
+				random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+			}
+			if((masks == null) || (masks.length < size) || (size > 255)){
+				CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+			}
+			random.generateData(masks, (short) 0, size);
+		}
+		return;
+	}
 
 	protected Aes(short key_len, byte asked_mode){
 		iv = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		last_block = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
-		if(USE_AES_CTR_ALT_IMPLEMENTATION == true){
-			tmp = JCSystem.makeTransientByteArray((short) 255, JCSystem.CLEAR_ON_DESELECT);
+		if(USE_AES_CTR_MASKING == true){
+			tmp = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		}
 		try{
 			switch(asked_mode){
@@ -82,6 +140,11 @@ public class Aes {
 				 */
 				aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES_TRANSIENT_DESELECT, key_builder, false);
 			}
+			/* If in CTR mode, we use a random 16 bytes to 16 bytes permutation for Xoring */
+			if((asked_mode == CTR) && (USE_AES_CTR_MASKING == true)){
+				ctr_permutation = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);	
+				ctr_masks = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);	
+			}
 			cipherAES = Cipher.getInstance(cipher_instance, false);
 		}
                 catch(CryptoException exception)
@@ -125,10 +188,10 @@ public class Aes {
 					if(asked_iv == null){
 						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 					}
-					if(asked_iv.length != AES_BLOCK_SIZE){
+					if(asked_iv.length < AES_BLOCK_SIZE){
 						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 					}
-					Util.arrayCopyNonAtomic(asked_iv, (short) 0, iv, (short) 0, (short) asked_iv.length);
+					Util.arrayCopyNonAtomic(asked_iv, (short) 0, iv, (short) 0, AES_BLOCK_SIZE);
 					break;
 				default:
 					CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
@@ -150,7 +213,7 @@ public class Aes {
 					else{
 						switch(mode){
 							case CBC:
-								cipherAES.init(aesKey, Cipher.MODE_ENCRYPT, asked_iv, (short) 0, (short) asked_iv.length);
+								cipherAES.init(aesKey, Cipher.MODE_ENCRYPT, iv, (short) 0, (short) iv.length);
 								break;
 							case CTR:
 								cipherAES.init(aesKey, Cipher.MODE_ENCRYPT);
@@ -167,7 +230,7 @@ public class Aes {
 					else{
 						switch(mode){
 							case CBC:
-								cipherAES.init(aesKey, Cipher.MODE_DECRYPT, asked_iv, (short) 0, (short) asked_iv.length);
+								cipherAES.init(aesKey, Cipher.MODE_DECRYPT, iv, (short) 0, (short) iv.length);
 								break;
 							case CTR:
 								cipherAES.init(aesKey, Cipher.MODE_ENCRYPT);
@@ -255,82 +318,63 @@ public class Aes {
 					 */
 					return cipherAES.doFinal(input, inputoffset, inputlen, output, outputoffset);
 				case CTR:
-					if(USE_AES_CTR_ALT_IMPLEMENTATION == false){
-						/* NOTE: this seems to be sub-optimal way of performing AES-CTR for big data chunks, since
-						 * we call the hardware coprocessor for each block. An improved way would be to
-						 * call the hardware once for all the counters that we need by preparing them in
-						 * in a working buffer ...
-						 * However, the tests (see the code below) shows that we still perform better
-						 */
-						short i;
-						short offset;
-						if((short)(output.length - outputoffset) < inputlen){
-							CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-						}
-						offset = last_offset;
-						for (i = 0; i < inputlen; i++){
-							if(offset == 0){
-								cipherAES.doFinal(iv, (short) 0, (short) iv.length, last_block, (short) 0);
-								// Increment the counter
-								increment_iv();
-							}
-							output[i] = (byte)(input[(short)(i + inputoffset)] ^ last_block[offset]);
-							offset = (short) ((short)(offset + 1) % AES_BLOCK_SIZE);
-						}
-						last_offset = offset;
-						return inputlen;
+					/* NOTE: this seems to be sub-optimal way of performing AES-CTR for big data chunks, since
+					 * we call the hardware coprocessor for each block. An (a priori) improved way would be to
+					 * call the hardware once for all the counters that we need by preparing them in
+					 * in a working buffer ...
+					 * However, the tests shows that we still perform better!
+					 */
+					short i, offset;
+					if((short)(output.length - outputoffset) < inputlen){
+						CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 					}
-					else{
-						short i, bytes, hardware_bytes_to_encrypt;
-						byte state = 0;
-						bytes = 0;
+					/* Initialize offset to the last session ofset */
+					offset = last_offset;
+					if(USE_AES_CTR_MASKING == true){
 						if(last_offset != 0){
-							for(i = last_offset; i < AES_BLOCK_SIZE; i++){
-								output[(short)(outputoffset + i)] = (byte)(input[(short)(inputoffset + i)] ^ last_block[i]);
-								bytes++;
-								last_offset++;
-								if(bytes > inputlen){
-									return inputlen;
+							/* First block handling */
+							/* Generate a random permutation */
+							gen_permutation(ctr_permutation, (short)(AES_BLOCK_SIZE - last_offset));
+							/* Generate random masks */
+							gen_masks(ctr_masks, (short)(AES_BLOCK_SIZE - last_offset));
+						}
+					}
+					for (i = 0; i < inputlen; i++){
+						if(offset == 0){
+							if(USE_AES_CTR_MASKING == true){
+								short perm_size;
+								if(((short)(inputlen - i) < AES_BLOCK_SIZE) && (inputlen % AES_BLOCK_SIZE != 0)){
+									/* Last block handling */
+									perm_size = (short)(inputlen - i);
 								}
+								else{
+									perm_size = AES_BLOCK_SIZE;
+								}
+								/* Generate a random permutation */
+								gen_permutation(ctr_permutation, perm_size);
+								/* Generate random masks */
+								gen_masks(ctr_masks, perm_size);
 							}
-						}
-						if((short)(inputlen - bytes) < AES_BLOCK_SIZE){
-							hardware_bytes_to_encrypt = 0;
-							state = 1;
-						}
-						if((short)(inputlen - bytes) % AES_BLOCK_SIZE != 0){
-							hardware_bytes_to_encrypt = (short)((inputlen - bytes) - ((short)(inputlen - bytes) % AES_BLOCK_SIZE));
-							state = 1;
-						}
-						else{
-							hardware_bytes_to_encrypt = (short)(inputlen - bytes);
-							state = 1;
-						}
-						if(hardware_bytes_to_encrypt != 0){
-							for(i = 0; i < (short)(hardware_bytes_to_encrypt / AES_BLOCK_SIZE); i++){
-								Util.arrayCopyNonAtomic(iv, (short) 0, tmp, (short) (i * AES_BLOCK_SIZE), AES_BLOCK_SIZE);
-								increment_iv();
-							}
-							cipherAES.doFinal(tmp, (short) 0, hardware_bytes_to_encrypt, tmp, (short) 0);
-							for(i = 0; i < hardware_bytes_to_encrypt; i++){
-								output[(short)(outputoffset + i)] = (byte)(input[(short)(inputoffset + i)] ^ tmp[i]);
-							}
-						}
-						if((short)(inputlen - bytes - hardware_bytes_to_encrypt) == 0){
-							last_offset = 0;
-							return inputlen;
-						}
-						if(state == (short)1){
-							// Encrypt our last block 
-							cipherAES.doFinal(iv, (short) 0, AES_BLOCK_SIZE, last_block, (short) 0);
-							for(i = 0; i < (short) (inputlen - bytes - hardware_bytes_to_encrypt); i++){
-								output[(short) (outputoffset + bytes + hardware_bytes_to_encrypt + i)] = (byte) (input[(short) (inputoffset + bytes + hardware_bytes_to_encrypt + i)] ^ last_block[i]);
-								last_offset++;
-							}
+							cipherAES.doFinal(iv, (short) 0, (short) iv.length, last_block, (short) 0);
+							/* Increment the counter */
 							increment_iv();
 						}
-						return inputlen;
+						if(USE_AES_CTR_MASKING == true){
+							short i_perm = (short) ((short)(AES_BLOCK_SIZE * (i / AES_BLOCK_SIZE)) + ctr_permutation[(short) (i % AES_BLOCK_SIZE)]);
+							short offset_perm = (short) ctr_permutation[offset];
+							/* XOR with masking and permutation to protect against SCA */
+							output[i_perm] = (byte)(input[(short)(i_perm + inputoffset)] ^ ctr_masks[(short) (i_perm % AES_BLOCK_SIZE)]);
+							output[i_perm] = (byte)(output[i_perm] ^ last_block[offset_perm]);
+							output[i_perm] = (byte)(output[i_perm] ^ ctr_masks[(short) (i_perm % AES_BLOCK_SIZE)]);	
+						}
+						else{
+							/* Straightforward XOR withtout any protection */
+							output[i] = (byte)(input[(short)(i + inputoffset)] ^ last_block[offset]);
+						}
+						offset = (short) ((short)(offset + 1) % AES_BLOCK_SIZE);
 					}
+					last_offset = offset;
+					return inputlen;
 				default:
 					CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
 			}

@@ -39,6 +39,39 @@ public class ECCurves {
         private KeyPair kpECDH = null;
         private ECPrivateKey privKeyECDH = null;
         private ECPublicKey pubKeyECDH = null;
+
+	/* Destroy local assets */
+	public void destroy(){
+		if(privKeyECDH != null){
+			privKeyECDH.clearKey();
+		}
+		if(pubKeyECDH != null){
+			pubKeyECDH.clearKey();
+		}
+		if(p != null){
+	                Util.arrayFillNonAtomic(p, (short) 0, (short) p.length, (byte) 0);
+		}
+		if(a != null){
+	                Util.arrayFillNonAtomic(a, (short) 0, (short) a.length, (byte) 0);
+		}
+		if(b != null){
+	                Util.arrayFillNonAtomic(b, (short) 0, (short) b.length, (byte) 0);
+		}
+		if(G != null){
+	                Util.arrayFillNonAtomic(G, (short) 0, (short) G.length, (byte) 0);
+		}
+		if(q != null){
+	                Util.arrayFillNonAtomic(q, (short) 0, (short) q.length, (byte) 0);
+		}
+		if(cofactor != null){
+	                Util.arrayFillNonAtomic(cofactor, (short) 0, (short) cofactor.length, (byte) 0);
+		}
+		if(ECCparams != null){
+	                Util.arrayFillNonAtomic(ECCparams, (short) 0, (short) ECCparams.length, (byte) 0);
+		}
+
+		return;
+	}
 	
 	protected ECCurves(byte[] LibECCparams){
 		/* Get the curve we must use from the LibECCparams.
@@ -402,36 +435,58 @@ public class ECCurves {
 			/* TODO: this is a lose way of encapsulating (r, s) in ASN.1, and this will not work for very large integers ...
 			 * This is OK in our specific use case, but a more flexible/robust way should be implemented here.
 			 */
+			/* First of all, we remove all the leading zeros from r and s */
+			short r_start_offset = 0;
+			short s_start_offset = r_length;
+			short i, out_sig_len = siglen;
+			for(i = 0; i < r_length; i++){
+				if(sigBuf[(short) (sigoffset + i)] != 0x00){
+					break;
+				}
+				r_start_offset++;
+			}
+			for(i = 0; i < s_length; i++){
+				if(sigBuf[(short) (sigoffset + (short) (siglen / 2) + i)] != 0x00){
+					break;
+				}
+				s_start_offset++;
+			}
+			r_length = (short) (r_length - r_start_offset);
+			s_length = (short) (s_length - (s_start_offset - (short) (siglen / 2)));
+			out_sig_len = (short) (r_length + s_length);
+			/* Then, we format our buffer */
 			working_buffer[0] = (byte) 0x30;
-			working_buffer[1] = (byte) (siglen + 4);
+			working_buffer[1] = (byte) (out_sig_len + 4);
 			short s_offset = (short) 0;
-			if((sigBuf[sigoffset] & ((byte) 0x80)) == 0x80){
+			if((sigBuf[(short) (sigoffset + r_start_offset)] & ((byte) 0x80)) == 0x80){
 				working_buffer[1]++;
+				out_sig_len++;
 				working_buffer[2] = 0x02;
 				working_buffer[3] = (byte)(r_length + 1);
 				working_buffer[4] = 0x00;
-	        		Util.arrayCopyNonAtomic(sigBuf, sigoffset, working_buffer, (short) 5, r_length);
+	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_start_offset), working_buffer, (short) 5, r_length);
 				s_offset = (short)(5 + r_length);
 			}
 			else{
 				working_buffer[2] = 0x02;
 				working_buffer[3] = (byte) (r_length);
-	        		Util.arrayCopyNonAtomic(sigBuf, sigoffset, working_buffer, (short) 4, r_length);	
+	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_start_offset), working_buffer, (short) 4, r_length);	
 				s_offset = (short)(4 + r_length);
 			}
-			if((sigBuf[(short)(sigoffset + r_length)] & ((byte) 0x80)) == 0x80){
+			if((sigBuf[(short) (sigoffset + s_start_offset)] & ((byte) 0x80)) == 0x80){
 				working_buffer[1]++;
+				out_sig_len++;
 				working_buffer[s_offset] = 0x02;
 				working_buffer[(short)(s_offset + 1)] = (byte)(s_length + 1);
 				working_buffer[(short)(s_offset + 2)] = 0x00;
-	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_length), working_buffer, (short) (s_offset + 3), s_length);
+	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + s_start_offset), working_buffer, (short) (s_offset + 3), s_length);
 			}
 			else{
 				working_buffer[s_offset] = 0x02;
 				working_buffer[(short)(s_offset + 1)] = (byte)(s_length);
-	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_length), working_buffer, (short) (s_offset + 2), s_length);	
+	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + s_start_offset), working_buffer, (short) (s_offset + 2), s_length);	
 			}
-			return sigECDSA.verify(indata, indataoffset, indatalen, working_buffer, (short) 0, (short) (siglen + 6));
+			return sigECDSA.verify(indata, indataoffset, indatalen, working_buffer, (short) 0, (short) (out_sig_len + 6));
 		}
 		catch(CryptoException exception)
         	{
@@ -461,7 +516,7 @@ public class ECCurves {
 	}
 
 	/* Nested classes for parameters */
-	static class Frp256v1 {
+	private static class Frp256v1 {
 		/* FRP256V1 parameters */
         	static final byte[] p = {
 	        (byte)0xf1, (byte)0xfd, (byte)0x17, (byte)0x8c, (byte)0x0b, (byte)0x3a, (byte)0xd5, (byte)0x8f,
@@ -503,7 +558,7 @@ public class ECCurves {
         	};
         	static final byte[] cofactor = { (byte) 0x01 };
 	}
-	static class Brainpoolp256r1 {
+	private static class Brainpoolp256r1 {
 		/* BRAINPOOLP256R1 parameters */
         	static final byte[] p = {
 	        (byte)0xA9, (byte)0xFB, (byte)0x57, (byte)0xDB, (byte)0xA1, (byte)0xEE, (byte)0xA9, (byte)0xBC,
@@ -540,7 +595,7 @@ public class ECCurves {
                 };
         	static final byte[] cofactor = { (byte) 0x01};
 	}
-	static class Secp256r1 {
+	private static class Secp256r1 {
 		/* SECP256R1 parameters */
         	static final byte[] p = {
 	        (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01,

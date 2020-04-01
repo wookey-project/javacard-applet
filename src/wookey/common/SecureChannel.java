@@ -35,12 +35,31 @@ public class SecureChannel {
 	private byte[] PIN_KEY_prefix = null;
 	/* Crypto contexts (note: the ECC contexts are handled by the ECC layer) */
 	private Aes aes_ctr_ctx = null;
-	private MessageDigest md = null;
 	/* NOTE: these contexts are 'public' since they can be shared with upper layers, in order to **save memory**
 	 * (this would be cleaner to have them private, but we have constrained ressources here ...)
 	 */
 	public Hmac hmac_ctx = null;
 	public Aes aes_cbc_ctx = null;
+	public MessageDigest md = null;
+
+
+	/* Self destruction operation */
+	public void self_destroy_card(){
+		/* Destroy persistent keys */
+		if(OurPrivKey != null){
+			OurPrivKey.clearKey();
+		}
+		if(OurPubKey != null){
+			OurPubKey.clearKey();
+		}
+		if(WooKeyPubKey != null){
+			WooKeyPubKey.clearKey();
+		}
+		/* Destroy ECDH context */
+		ec_context.destroy();
+		/* Destroy session keys */
+		close_secure_channel();
+	}
 
 	protected SecureChannel(byte[] default_pin, byte[] OurPrivKeyBuf, byte[] OurPubKeyBuf, byte[] WooKeyPubKeyBuf, byte[] LibECCparams)
 	{
@@ -117,6 +136,10 @@ public class SecureChannel {
 		secure_channel_initialized[0] = secure_channel_initialized[1] = (byte)0x00;
 		working_buffer = JCSystem.makeTransientByteArray((short) 255, JCSystem.CLEAR_ON_DESELECT);
 		ECDHSharedSecret = JCSystem.makeTransientByteArray(BN_len, JCSystem.CLEAR_ON_DESELECT);
+		/* NOTE: AES CTR and HMAC keys are *session keys* established with the secure channel.
+		 * They are transient and cleared on deselect, hence no need to store them in a "secure"
+		 * buffer (i.e. a javacard key builder buffer).
+		 */
 		/* AES-128 CTR key */
 		AES_key = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		/* HMAC-SHA-256 key */
@@ -160,7 +183,7 @@ public class SecureChannel {
 	}
 
 	/* Function to initialize our secure channel using ECDH */
-	public void secure_channel_init(APDU apdu, byte[] data)
+	public void secure_channel_init(APDU apdu, byte[] data, byte[] challenge)
  	{
 		short BN_len = (short) ec_context.p.length;
         	byte buffer[] = apdu.getBuffer();
@@ -168,14 +191,19 @@ public class SecureChannel {
 		short apdu_siglen = (short)(2 * BN_len);
 		short apdu_shared_point_len = (short)(3 * BN_len);
 
-        	Util.arrayCopyNonAtomic(buffer, apdu.getOffsetCdata(), data, (short) 0, receivedLen);
-
 		/* Sanity check on the length */
 		if(receivedLen != (short) (apdu_shared_point_len + apdu_siglen)){
 			CryptoException.throwIt(CryptoException.ILLEGAL_USE);
 		}
-
-		if(ec_context.ecdsa_verify(data, (short) 0, apdu_shared_point_len, data, apdu_shared_point_len, apdu_siglen, working_buffer, WooKeyPubKey) == false){
+		/* Locally copy the shared point coordinates */
+        	Util.arrayCopyNonAtomic(buffer, apdu.getOffsetCdata(), data, (short) 0, apdu_shared_point_len);
+		/* We concatenate our challenge to the data to be signature verified */
+		if(data.length < (short) (apdu_shared_point_len + challenge.length)){
+			CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+		}
+        	Util.arrayCopyNonAtomic(challenge, (short) 0, data, apdu_shared_point_len, (short) challenge.length);
+		/* Now we verify the signature of the received data */
+		if(ec_context.ecdsa_verify(data, (short) 0, (short) (apdu_shared_point_len + challenge.length), buffer, (short) (apdu.getOffsetCdata() + apdu_shared_point_len), apdu_siglen, working_buffer, WooKeyPubKey) == false){
 			CryptoException.throwIt(CryptoException.ILLEGAL_USE);
 		}
 		/* Compute the shared secret */
@@ -314,6 +342,12 @@ public class SecureChannel {
 	}
 
 	public void send_encrypted_apdu(APDU apdu, byte[] indata, short indataoffset, short indatalen, byte sw1, byte sw2){
+		if(is_secure_channel_initialized() == false){
+			/* If the secure channel is not initialized yet, we send an exception with SW1 and SW2 */
+			close_secure_channel();
+			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
+		}
+		/* Double check for faults */
 		if(is_secure_channel_initialized() == false){
 			/* If the secure channel is not initialized yet, we send an exception with SW1 and SW2 */
 			close_secure_channel();

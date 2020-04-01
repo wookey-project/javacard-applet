@@ -8,6 +8,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 {
 	/* Our common WooKey class */
 	private static WooKey W = null;
+        /* NOTE: we reuse crypto contexts from the secure channel layer. This is done to **save memory**. */
 
         /* Instructions specific to the DFU applet */
         public static final byte TOKEN_INS_BEGIN_DECRYPT_SESSION = (byte) 0x20;
@@ -28,20 +29,21 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         private static short[] session_num_chunk = null;
         final static short MAX_NUM_CHUNKS = (short)0x7fff; 
 
+        /* NOTE: we use our local enryption class for
+         * local protection of sensitive assets (the MSK in this case).
+         */
+        EncLocalStorage local_msk_enc = null;
+
 	/* [RB] FIXME/TODO: we can handle the max number of derived session keys inside de card since
 	 * we have the header with the encrypted content global length. However, this would require
 	 * using 32-bit integers, which is not so straightforward using generic Javacard API.
 	 */
 
-        /* HMAC contexts */
-        private static Hmac hmac_ctx = null;
-        /* AES context */
-        private static Aes aes_cbc_ctx = null;
         /* Useful tmp buffer */
         private static byte[] tmp = null;
 
         /* Variable handling initialization */
-        private boolean init_done = false;
+        private static byte init_done = (byte)0x55;
 
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
@@ -54,7 +56,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 		last_num_chunk = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
 		session_num_chunk = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
                 /* Our working temporary buffer */
-                tmp = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
+                tmp = JCSystem.makeTransientByteArray((short) 32, JCSystem.CLEAR_ON_DESELECT);
 
  		new WooKeyDFU();
 	}
@@ -67,6 +69,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
         /* Self destroy the card */
         private void self_destroy_card(){
                 /* We destroy all the assets */
+                local_msk_enc.destroy();
                 Util.arrayFillNonAtomic(Keys.MasterSecretKey, (short) 0, (short) Keys.MasterSecretKey.length, (byte) 0);
                 if(W != null){
                         W.self_destroy_card();
@@ -114,16 +117,31 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 
 
         public boolean is_decrypt_session_opened(){
-                if((wookeydec_state[0] == (byte)0xaa) && (wookeydec_state[1] == (byte)0x55)){
-                        return true;
-                }
-                return false;
+		if(wookeydec_state[0] == (byte)0xaa){
+			if(wookeydec_state[1] == (byte)0x55){
+				return true;
+			}
+			else{
+				return false;
+			}
+		}
+		else{
+			return false;
+		}
         }
 
 	public void begin_decrypt_session(APDU apdu, byte ins){
                 /* The user asks for beginning a decryption session, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
                         return;
                 }
 		/* Close any previous decrypt session */
@@ -133,7 +151,7 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 		 * + MAX_CHUNK_SIZE(4 bytes) + IV + HMAC + SIG = (5*4) + 4 + 16 + 32 + 64
 		 */
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-                if(data_len != (short)((5*4) + 4 + dec_session_IV.length + hmac_ctx.hmac_len() + ECCurves.get_EC_sig_len(Keys.LibECCparams))){
+                if(data_len != (short)((5*4) + 4 + dec_session_IV.length + W.schannel.hmac_ctx.hmac_len() + ECCurves.get_EC_sig_len(Keys.LibECCparams))){
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
                         return;
                 }
@@ -143,14 +161,25 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
                         return;
                 }
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        }
+                }
                 else{
+                        /* We are not authenticated, ask for an authentication */
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+                        return;
+		}
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
 			/* We compute the HMAC on the received data except the HMAC itself */
-                	hmac_ctx.hmac_init(Keys.MasterSecretKey, (short) 0, (short) 32);
-			hmac_ctx.hmac_update(W.data, (short) 0, (short) (data_len - hmac_ctx.hmac_len() - ECCurves.get_EC_sig_len(Keys.LibECCparams)));
-			hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), ECCurves.get_EC_sig_len(Keys.LibECCparams));
-			hmac_ctx.hmac_finalize(W.schannel.working_buffer, (short) 0);
+                        local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 0, (short) 32, tmp, (short) 0);
+                	W.schannel.hmac_ctx.hmac_init(tmp, (short) 0, (short) 32);
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 0, (short) (data_len - W.schannel.hmac_ctx.hmac_len() - ECCurves.get_EC_sig_len(Keys.LibECCparams)));
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) (data_len - ECCurves.get_EC_sig_len(Keys.LibECCparams)), ECCurves.get_EC_sig_len(Keys.LibECCparams));
+			W.schannel.hmac_ctx.hmac_finalize(W.schannel.working_buffer, (short) 0);
 			/* We compare the computed HMAC with the received one */
-			if(Util.arrayCompare(W.schannel.working_buffer, (short) 0, W.data, (short) (data_len - hmac_ctx.hmac_len() - ECCurves.get_EC_sig_len(Keys.LibECCparams)), hmac_ctx.hmac_len()) != 0){
+			if(Util.arrayCompare(W.schannel.working_buffer, (short) 0, W.data, (short) (data_len - W.schannel.hmac_ctx.hmac_len() - ECCurves.get_EC_sig_len(Keys.LibECCparams)), W.schannel.hmac_ctx.hmac_len()) != 0){
 				/* HMAC is not OK, return an error */
                         	W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
 				return;
@@ -167,16 +196,34 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
                         return;
                 }
+		else{
+                        /* We are not authenticated, ask for an authentication */
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+                        return;
+		}
 	}
 
         private void derive_key(APDU apdu, byte ins){
                 /* The user asks for key derivation, secure channel must be established */
                 if(W.schannel.is_secure_channel_initialized() == false){
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
                         return;
                 }
                 short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
                 /* Check if a decryption session is already opened */
+                if(is_decrypt_session_opened() == false){
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+                        return;
+                }
+		/* Double check against faults */
                 if(is_decrypt_session_opened() == false){
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
                         return;
@@ -194,39 +241,59 @@ public class WooKeyDFU extends Applet implements ExtendedLength
                         W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
                         return;
                 }
-                short chunk_num = (short)((W.data[0] << 8) ^ (W.data[1] & 0xff));
-		if((chunk_num < 0) || (chunk_num > MAX_NUM_CHUNKS) || (session_num_chunk[0] > MAX_NUM_CHUNKS)){
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        }
+                }
+                else{
+                        /* We are not authenticated, ask for an authentication */
                         close_decrypt_session();
-                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x04);
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
                         return;
 		}
-                else{
-                        if((dec_session_IV == null) || (cur_session_IV == null)){
-                        	close_decrypt_session();
-                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x05);
-                                return;
-                        }
-			session_num_chunk[0]++;
-                        Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 32, W.schannel.working_buffer, (short) 0, (short) 16);
-                        Util.arrayCopyNonAtomic(Keys.MasterSecretKey, (short) 48, tmp, (short) 0, (short) 16);
-                        aes_cbc_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
-			/* Compute current session key */
-			if(chunk_num >= last_num_chunk[0]){
-				short i;
-				for(i = 0; i < (short)(chunk_num-last_num_chunk[0]); i++){
-					inc_iv();
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
+	                short chunk_num = (short)((W.data[0] << 8) ^ (W.data[1] & 0xff));
+			if((chunk_num < 0) || (chunk_num > MAX_NUM_CHUNKS) || (session_num_chunk[0] > MAX_NUM_CHUNKS)){
+                	        close_decrypt_session();
+	                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x04);
+        	                return;
+			}
+               		else{
+                        	if((dec_session_IV == null) || (cur_session_IV == null)){
+                        		close_decrypt_session();
+	                                W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x05);
+        	                        return;
+                	        }
+				session_num_chunk[0]++;
+				/* Decrypt our derivation key and IV from the local storage backend */
+				local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 32, (short) 16, W.schannel.working_buffer, (short) 0);
+				local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 48, (short) 16, tmp, (short) 0);
+        	                W.schannel.aes_cbc_ctx.aes_init(W.schannel.working_buffer, tmp, Aes.ENCRYPT);
+				/* Compute current session key */
+				if(chunk_num >= last_num_chunk[0]){
+					short i;
+					for(i = 0; i < (short)(chunk_num-last_num_chunk[0]); i++){
+						inc_iv();
+					}
 				}
-			}
-			else{
-				compute_iv(chunk_num);
-			}
-			last_num_chunk[0] = chunk_num;
-                        /* Encrypt the current IV */
-                        aes_cbc_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
-                        /* Return the derived key */
-                        W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) dec_session_IV.length, (byte) 0x90, (byte) 0x00);
+				else{
+					compute_iv(chunk_num);
+				}
+				last_num_chunk[0] = chunk_num;
+                        	/* Encrypt the current IV */
+                        	W.schannel.aes_cbc_ctx.aes(cur_session_IV, (short) 0, (short) cur_session_IV.length, W.data, (short) 0);
+                        	/* Return the derived key */
+                        	W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) dec_session_IV.length, (byte) 0x90, (byte) 0x00);
+                        	return;
+               		}
+		}
+		else{
+                        /* We are not authenticated, ask for an authentication */
+                        close_decrypt_session();
+                        W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
                         return;
-                }
+		}
         }
 	
 	public void process(APDU apdu)
@@ -246,19 +313,28 @@ public class WooKeyDFU extends Applet implements ExtendedLength
 			return;
 		}
 
-		if((W == null) || (init_done == false)){
-                        init_done = false;
-			W = new WooKey(Keys.UserPin, Keys.PetPin, Keys.OurPrivKeyBuf, Keys.OurPubKeyBuf, Keys.WooKeyPubKeyBuf, Keys.LibECCparams, Keys.PetName, Keys.PetNameLength, Keys.max_pin_tries, Keys.max_secure_channel_tries);
-			/* Get the shared crypto contexts with the secure channel layer. This is done to **save memory**. */
-	                /* HMAC context */
-        	        hmac_ctx = W.schannel.hmac_ctx;
-                	/* AES context */
-	                aes_cbc_ctx = W.schannel.aes_cbc_ctx;
-                        init_done = true;
+                if(init_done == (byte) 0x55){
+                        if(W != null){
+                                /* This should not happen */
+                                W.destroy_card = (byte) 0xaa;
+                                ISOException.throwIt((short) 0x6660);
+                        }
+                        /* Proceed with initialization */
+                        init_done = (byte) 0x55;
 
+                        /* Instantiate our local storage class to protect sensitive assets */
+                        local_msk_enc = new EncLocalStorage();
+
+			W = new WooKey(Keys.UserPin, Keys.PetPin, Keys.OurPrivKeyBuf, Keys.OurPubKeyBuf, Keys.WooKeyPubKeyBuf, Keys.LibECCparams, Keys.PetName, Keys.PetNameLength, Keys.max_pin_tries, Keys.max_secure_channel_tries, local_msk_enc);	
+                        init_done = (byte) 0x55;
+
+                        /* Locally encrypt our MSK */
+                        local_msk_enc.Encrypt(Keys.MasterSecretKey, (short) 0, (short) Keys.MasterSecretKey.length, Keys.MasterSecretKey, (short) 0);
+
+                        init_done = (byte) 0xaa;
 		}
 
-                if(init_done == false){
+                if(init_done != (byte) 0xaa){
                         ISOException.throwIt((short) 0x6660);
                 }
 
