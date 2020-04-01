@@ -9,9 +9,12 @@ import javacard.security.*;
 public class Hmac {
 	/* If we have native HMAC support, use it */
         /* !!WARNING: using native HMAC can provoke unexpected errors on
-         * cards that do not retur an error when getting an instance, but
+         * cards that do not return an error when getting an instance, but
          * raise an exception when using the instance ... Turn to 'false'
          * to fall back to software HMAC if this happens.
+	 * 
+	 * NOTE: we amke some attempts at detecting this, at runtime, but
+	 * explicitly turning to false might help.
          */
 	private static final boolean TRY_USE_NATIVE_HMAC = true;
 	private boolean use_native_hmac = false;
@@ -38,6 +41,47 @@ public class Hmac {
 	private byte[] orig_opad_masks = null;
 	private byte[] ipad_masks = null;
 	private byte[] opad_masks = null;
+	/* Test for hmac Native */
+	private byte[] hmac_native_test = null;
+
+	/* The permutation we use to shuffle the key manipulation.
+	 */
+	private byte[] permutation = null;
+
+        /* Knuth shuffles to generate a random permutation */
+        void gen_permutation(byte[] permutation, short size, byte[] tmp){
+                if(USE_HMAC_MASKING == true){
+                        if(random == null){
+                                /* Initialize the secure random source */
+                                random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+                        }
+                        if((permutation == null) || (tmp == null) || (permutation.length < size) || (size > 255)){
+                                CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+                        }
+                        /* Go shuffle */
+                        short i;
+                        byte swp;
+                        for(i = 0; i < size; i++){
+                                permutation[i] = (byte) i;
+                        }
+                        if(size <= 2){
+                                return;
+                        }
+                        if(tmp.length < (short)(size - 2)){
+                                CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+                        }
+                        random.generateData(tmp, (short) 0, (short) (size - 2));
+                        for(i = 0; i <= (short) (size - 2); i++){
+                                short j = (short) (size - i);
+                                j = (short) (((short)tmp[i] & 0xff) % j);
+                                j = (short)(i + j);
+                                swp = permutation[i];
+                                permutation[i] = permutation[j];
+                                permutation[j] = swp;
+                        }
+                }
+                return;
+        }
 
 	protected Hmac(byte digest_type){
 		if(TRY_USE_NATIVE_HMAC == true){
@@ -87,6 +131,16 @@ public class Hmac {
 				use_native_hmac = false;
 			}
 		}
+		if(use_native_hmac == true){
+			/* Some cards advertise to support native HMAC through the API, but this is false ... */
+			try {
+				hmac_native_test = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
+				hmac_key.setKey(hmac_native_test, (short) 0, (short) 1);
+			}
+		        catch(CryptoException exception){
+				use_native_hmac = false;
+			}
+		}
 		if(use_native_hmac == false){	
 			if((ipad != null) || (opad != null) || (md_i != null) || (md_o != null)){
 				CryptoException.throwIt(CryptoException.INVALID_INIT);
@@ -111,6 +165,7 @@ public class Hmac {
 						random.generateData(orig_opad_masks, (short) 0, (short) orig_opad_masks.length);
 						ipad_masks = JCSystem.makeTransientByteArray((short) ipad.length, JCSystem.CLEAR_ON_DESELECT);
 						opad_masks = JCSystem.makeTransientByteArray((short) opad.length, JCSystem.CLEAR_ON_DESELECT);
+						permutation = JCSystem.makeTransientByteArray((short) opad.length, JCSystem.CLEAR_ON_DESELECT);
 					}
 					/**/
 					local_key = JCSystem.makeTransientByteArray((short) (md_i.getLength()), JCSystem.CLEAR_ON_DESELECT);
@@ -135,18 +190,38 @@ public class Hmac {
 				short i;
 				md_i.reset();
 				md_o.reset();
+				short perm_length = 0;
 	
 				if(USE_HMAC_MASKING == true){
+					if(key_length > ipad.length){
+						perm_length = (short) ipad.length;
+					}
+					else{
+						perm_length = key_length;
+					}
+					/* Generate our shuffling permutation (we use ipad_masks as a temporary buffer here) */
+					gen_permutation(permutation, perm_length, ipad_masks);
 					random.generateData(ipad_masks, (short) 0, (short) ipad_masks.length);
 					for(i = 0; i < (short) ipad.length; i++){
-						ipad[i] = (byte)(ipad_masks[i] ^ orig_ipad_masks[i]);
+						short i_perm = i;
+						if(i < perm_length){
+							i_perm = (short) permutation[i];
+						}
+						else{
+							permutation[i] = (byte) i;
+						}
+						ipad[i_perm] = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm]);
 					}
 					random.generateData(opad_masks, (short) 0, (short) opad_masks.length);
 					for(i = 0; i < (short) opad.length; i++){
-						opad[i] = (byte)(opad_masks[i] ^ orig_opad_masks[i]);
+						short i_perm = i;
+						if(i < perm_length){
+							i_perm = (short) permutation[i];
+						}
+						opad[i_perm] = (byte)(opad_masks[i_perm] ^ orig_opad_masks[i_perm]);
 					}
 				}
-				
+		
 				if(key_length > ipad.length){
 					/* Key length is > block size */
 					local_md.reset();
@@ -158,10 +233,11 @@ public class Hmac {
 					for(i = 0; i < ipad.length; i++){
 						if(i < local_key.length){
 							if(USE_HMAC_MASKING == true){
-								byte msk = (byte)(ipad_masks[i] ^ orig_ipad_masks[i] ^ 0x36);
-								ipad[i] ^= (local_key[i] ^ msk);
-								msk = (byte)(opad_masks[i] ^ orig_opad_masks[i] ^ 0x5c);
-								opad[i] ^= (local_key[i] ^ msk);
+								short i_perm = (short) permutation[i];
+								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
+								ipad[i_perm] ^= (local_key[i_perm] ^ msk);
+								msk = (byte)(opad_masks[i_perm] ^ orig_opad_masks[i_perm] ^ 0x5c);
+								opad[i_perm] ^= (local_key[i_perm] ^ msk);
 							}
 							else{
 								ipad[i] = (byte)(local_key[i] ^ 0x36);
@@ -170,10 +246,11 @@ public class Hmac {
 						}
 						else{
 							if(USE_HMAC_MASKING == true){
-								byte msk = (byte)(ipad_masks[i] ^ orig_ipad_masks[i] ^ 0x36);
-								ipad[i] ^= msk;
-								msk = (byte)(opad_masks[i] ^ orig_opad_masks[i] ^ 0x5c);
-								opad[i] ^= msk;
+								short i_perm = (short) permutation[i];
+								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
+								ipad[i_perm] ^= msk;
+								msk = (byte)(opad_masks[i_perm] ^ orig_opad_masks[i_perm] ^ 0x5c);
+								opad[i_perm] ^= msk;
 							}
 							else{
 								ipad[i] = 0x36;
@@ -187,10 +264,11 @@ public class Hmac {
 					for(i = 0; i < ipad.length; i++){
 						if(i < key_length){
 							if(USE_HMAC_MASKING == true){
-								byte msk = (byte)(ipad_masks[i] ^ orig_ipad_masks[i] ^ 0x36);
-								ipad[i] ^= (key[(short)(key_offset + i)] ^ msk);
-								msk = (byte)(opad_masks[i] ^ orig_opad_masks[i] ^ 0x5c);
-								opad[i] ^= (key[(short)(key_offset + i)] ^ msk);
+								short i_perm = permutation[i];
+								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
+								ipad[i_perm] ^= (key[(short)(key_offset + i_perm)] ^ msk);
+								msk = (byte)(opad_masks[i_perm] ^ orig_opad_masks[i_perm] ^ 0x5c);
+								opad[i_perm] ^= (key[(short)(key_offset + i_perm)] ^ msk);
 							}
 							else{
 								ipad[i] = (byte)(key[(short)(key_offset + i)] ^ 0x36);
@@ -199,10 +277,11 @@ public class Hmac {
 						}
 						else{
 							if(USE_HMAC_MASKING == true){
-								byte msk = (byte)(ipad_masks[i] ^ orig_ipad_masks[i] ^ 0x36);
-								ipad[i] ^= msk;
-								msk = (byte)(opad_masks[i] ^ orig_opad_masks[i] ^ 0x5c);
-								opad[i] ^= msk;
+								short i_perm = permutation[i];
+								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
+								ipad[i_perm] ^= msk;
+								msk = (byte)(opad_masks[i_perm] ^ orig_opad_masks[i_perm] ^ 0x5c);
+								opad[i_perm] ^= msk;
 							}
 							else{
 								ipad[i] = 0x36;
