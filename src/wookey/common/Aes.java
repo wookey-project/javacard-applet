@@ -34,7 +34,7 @@ public class Aes {
 	private short call_counter = 0;
 	/* Local permutation to protect the CTR xoring */
 	private byte[] ctr_permutation = null;
-	RandomData random = null;
+	private RandomData random = null;
 	/* Local masks to mask CTR xoring */
 	private byte[] ctr_masks = null;	
 
@@ -339,10 +339,12 @@ public class Aes {
 							gen_masks(ctr_masks, (short)(AES_BLOCK_SIZE - last_offset));
 						}
 					}
+					short num_blocks = 0;
 					for (i = 0; i < inputlen; i++){
 						if(offset == 0){
 							if(USE_AES_CTR_MASKING == true){
 								short perm_size;
+								num_blocks++;
 								if(((short)(inputlen - i) < AES_BLOCK_SIZE) && (inputlen % AES_BLOCK_SIZE != 0)){
 									/* Last block handling */
 									perm_size = (short)(inputlen - i);
@@ -360,12 +362,31 @@ public class Aes {
 							increment_iv();
 						}
 						if(USE_AES_CTR_MASKING == true){
-							short i_perm = (short) ((short)(AES_BLOCK_SIZE * (i / AES_BLOCK_SIZE)) + ctr_permutation[(short) (i % AES_BLOCK_SIZE)]);
-							short offset_perm = (short) ctr_permutation[offset];
+							short i_perm, offset_perm;
+							if((last_offset != 0) && (i < (short) (AES_BLOCK_SIZE - last_offset))){
+                					        /* First block handling */
+								i_perm = ctr_permutation[(short) (offset - last_offset)];
+								offset_perm = (short)(i_perm + last_offset);
+							}
+							else{
+								i_perm = offset_perm = ctr_permutation[offset];
+							}
+							if(num_blocks >= (short)1){
+					                        /* Offset by the number of treated blocks */
+								i_perm += (short) (AES_BLOCK_SIZE * (short) (num_blocks - 1));
+							}
+							if((last_offset != 0) && (i >= (short) (AES_BLOCK_SIZE - last_offset))){
+					                        /* Block others than first block */
+								i_perm += (short) (AES_BLOCK_SIZE - last_offset);
+							}
+							/* Sanity check */
+							if((i_perm >= output.length) || ((short)(i_perm + inputoffset) >= input.length)){
+								CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+							}
 							/* XOR with masking and permutation to protect against SCA */
-							output[i_perm] = (byte)(input[(short)(i_perm + inputoffset)] ^ ctr_masks[(short) (i_perm % AES_BLOCK_SIZE)]);
+							output[i_perm] = (byte)(input[(short)(i_perm + inputoffset)] ^ ctr_masks[offset_perm]);
 							output[i_perm] = (byte)(output[i_perm] ^ last_block[offset_perm]);
-							output[i_perm] = (byte)(output[i_perm] ^ ctr_masks[(short) (i_perm % AES_BLOCK_SIZE)]);	
+							output[i_perm] = (byte)(output[i_perm] ^ ctr_masks[offset_perm]);	
 						}
 						else{
 							/* Straightforward XOR withtout any protection */
