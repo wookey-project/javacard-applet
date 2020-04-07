@@ -7,7 +7,7 @@ import javacardx.crypto.*;
  * locally in the token, using internal protected assets (protected using key bags).
  */
 public class EncLocalStorage {
-        static final short AES_BLOCK_SIZE = 16;
+        private static final short AES_BLOCK_SIZE = 16;
         private AESKey aesKey = null;
 	/* Cipher rinstance */
         private Cipher cipherAES = null;

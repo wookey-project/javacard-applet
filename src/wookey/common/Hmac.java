@@ -18,8 +18,8 @@ public class Hmac {
          */
 	private static final boolean TRY_USE_NATIVE_HMAC = true;
 	private boolean use_native_hmac = false;
-	Signature hmac_instance = null;
-	HMACKey hmac_key = null;
+	private Signature hmac_instance = null;
+	private HMACKey hmac_key = null;
 	/* The message digest instances */
 	private MessageDigest md_i = null;
 	private MessageDigest md_o = null;
