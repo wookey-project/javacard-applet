@@ -13,13 +13,14 @@ public class Hmac {
          * raise an exception when using the instance ... Turn to 'false'
          * to fall back to software HMAC if this happens.
 	 * 
-	 * NOTE: we amke some attempts at detecting this, at runtime, but
-	 * explicitly turning to false might help.
+	 * NOTE: we make some attempts at detecting this, at runtime, but
+	 * explicitly turning to false might help!
          */
 	private static final boolean TRY_USE_NATIVE_HMAC = true;
 	private boolean use_native_hmac = false;
 	private Signature hmac_instance = null;
 	private HMACKey hmac_key = null;
+	private HMACKey hmac_key_test = null;
 	/* The message digest instances */
 	private MessageDigest md_i = null;
 	private MessageDigest md_o = null;
@@ -98,27 +99,33 @@ public class Hmac {
 					case MessageDigest.ALG_SHA_256:
 						try {
 							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, true);
+							hmac_key_test = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, true);
 						}
 						catch(CryptoException e){
 							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, false);
+							hmac_key_test = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_256_BLOCK_64, false);
 						}
 						hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
 						break;
 					case MessageDigest.ALG_SHA_384:
 						try {
 							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, true);
+							hmac_key_test = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, true);
 						}
 						catch(CryptoException e){
 							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, false);
+							hmac_key_test = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_384_BLOCK_128, false);
 						}
 						hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_384, false);
 						break;
 					case MessageDigest.ALG_SHA_512:
 						try {
 							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, true);
+							hmac_key_test = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, true);
 						}
 						catch(CryptoException e){
 							hmac_key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, false);
+							hmac_key_test = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_DESELECT, KeyBuilder.LENGTH_HMAC_SHA_512_BLOCK_128, false);
 						}
 						hmac_instance = Signature.getInstance(Signature.ALG_HMAC_SHA_512, false);
 						break;
@@ -135,7 +142,7 @@ public class Hmac {
 			/* Some cards advertise to support native HMAC through the API, but this is false ... */
 			try {
 				hmac_native_test = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
-				hmac_key.setKey(hmac_native_test, (short) 0, (short) 1);
+				hmac_key_test.setKey(hmac_native_test, (short) 0, (short) 1);
 			}
 		        catch(CryptoException exception){
 				use_native_hmac = false;
@@ -174,8 +181,9 @@ public class Hmac {
 				default:
 					CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
 			}
-			digest = digest_type;
 		}
+		/* Set the digest type */
+		digest = digest_type;
 	}
 
         public void hmac_init(byte[] key, short key_offset, short key_length){
@@ -405,26 +413,23 @@ public class Hmac {
         }
 
 	public short hmac_len(){	
-		if(use_native_hmac == true){
-			return hmac_instance.getLength();
-		}
-		else{
+		if(use_native_hmac == false){
 			if((md_i == null) || (md_o == null)){
-				CryptoException.throwIt(CryptoException.UNINITIALIZED_KEY);
+				CryptoException.throwIt(CryptoException.INVALID_INIT);
 			}
-			switch(digest){
-				case MessageDigest.ALG_SHA_224:
-					return 28;
-				case MessageDigest.ALG_SHA_256:
-					return 32;
-				case MessageDigest.ALG_SHA_384:
-					return 48;
-				case MessageDigest.ALG_SHA_512:
-					return 64;
-				default:
-					CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-			}
-			return 0;
 		}
+		switch(digest){
+			case MessageDigest.ALG_SHA_224:
+				return 28;
+			case MessageDigest.ALG_SHA_256:
+				return 32;
+			case MessageDigest.ALG_SHA_384:
+				return 48;
+			case MessageDigest.ALG_SHA_512:
+				return 64;
+			default:
+				CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+		}
+		return 0;
 	}
 }
