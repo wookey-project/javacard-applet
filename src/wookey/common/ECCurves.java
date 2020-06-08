@@ -458,7 +458,7 @@ public class ECCurves {
 			working_buffer[0] = (byte) 0x30;
 			working_buffer[1] = (byte) (out_sig_len + 4);
 			short s_offset = (short) 0;
-			if((sigBuf[(short) (sigoffset + r_start_offset)] & ((byte) 0x80)) == 0x80){
+			if((sigBuf[(short) (sigoffset + r_start_offset)] & ((byte) 0x80)) == (byte)0x80){
 				working_buffer[1]++;
 				out_sig_len++;
 				working_buffer[2] = 0x02;
@@ -473,7 +473,7 @@ public class ECCurves {
 	        		Util.arrayCopyNonAtomic(sigBuf, (short) (sigoffset + r_start_offset), working_buffer, (short) 4, r_length);	
 				s_offset = (short)(4 + r_length);
 			}
-			if((sigBuf[(short) (sigoffset + s_start_offset)] & ((byte) 0x80)) == 0x80){
+			if((sigBuf[(short) (sigoffset + s_start_offset)] & ((byte) 0x80)) == (byte)0x80){
 				working_buffer[1]++;
 				out_sig_len++;
 				working_buffer[s_offset] = 0x02;
