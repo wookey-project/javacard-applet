@@ -231,6 +231,9 @@ public class SecureChannel {
 			/* First IV */
         		Util.arrayCopyNonAtomic(IV, (short) 0, first_IV, (short) 0, (short) 16);
 
+			/* We can erase our ECDHSharedSecret since we do not need it anymore */
+			Util.arrayFillNonAtomic(ECDHSharedSecret, (short) 0, (short) ECDHSharedSecret.length, (byte) 0);
+
 			/* Secure channel is opened */
 			set_secure_channel_opened();
 		}

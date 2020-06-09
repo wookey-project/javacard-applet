@@ -339,10 +339,12 @@ public class ECCurves {
 			short structured_sequence_siglen = sigECDSA.sign(indata, indataoffset, indatalen, working_buffer, (short) 0);
 			short r_size = 0;
 			short s_size = 0;
-			short siglen = 0;
+			short siglen = (short) (2 * p.length);
 			/* TODO: this is a lose way of decapsulating (r, s) from the SEQUENCE ASN.1 representation ...
 			 * This is OK in our specific use case, but a more flexible/robust way should be implemented here.
 			 */
+			/* First, zeroize our output buffer */
+	                Util.arrayFillNonAtomic(outdata, outdataoffset, siglen, (byte) 0);	
 			if(working_buffer[0] != 0x30){
                         	ISOException.throwIt((short) 0xECE0);	
 			}
@@ -359,18 +361,29 @@ public class ECCurves {
 				 * (see the ASN.1 encoding rules for INTEGER objects). Do not remove it if the expected r length
 				 * is realized with the leading 0x00 ...
 				 */
-				if(((working_buffer[5] & (byte)0x80) != 0) && (r_size != p.length)){
+				if(((working_buffer[5] & (byte)0x80) != 0) && (r_size == (short) (p.length + 1))){
+					/* Sanity check */
+					if(r_size > (short) (p.length + 1)){
+                		        	ISOException.throwIt((short) 0xECE3);
+					}
 					r_size--;
        		 			Util.arrayCopyNonAtomic(working_buffer, (short) 5, outdata, outdataoffset, r_size);
 				}
 				else{
-       	 				Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, outdataoffset, r_size);
+					/* Sanity check */
+					if(r_size > p.length){
+                		        	ISOException.throwIt((short) 0xECE3);
+					}
+       	 				Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, (short) (outdataoffset + p.length - r_size), r_size);
 				}
 			}
 			else{
-       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, outdataoffset, r_size);
+				/* Sanity check */
+				if(r_size > p.length){
+               		        	ISOException.throwIt((short) 0xECE3);
+				}
+       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 4, outdata, (short) (outdataoffset + p.length - r_size), r_size);
 			}
-			siglen += r_size;
 			if(working_buffer[(short)(4 + working_buffer[3])] != 0x02){
                         	ISOException.throwIt((short) 0xECE3);
 			}
@@ -380,22 +393,30 @@ public class ECCurves {
 				 * (see the ASN.1 encoding rules for INTEGER objects). Do not remove it if the expected s length
                                  * is realized with the leading 0x00 ...
 				 */
-				if(((working_buffer[(short)(4 + working_buffer[3] + 2 + 1)] & (byte)0x80) != 0) && (s_size != p.length)){
+				if(((working_buffer[(short)(4 + working_buffer[3] + 2 + 1)] & (byte)0x80) != 0) && (s_size == (short) (p.length + 1))){
+					/* Sanity check */
+					if(s_size > (short) (p.length + 1)){
+                		        	ISOException.throwIt((short) 0xECE3);
+					}
 					s_size--;
-       		 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 3), outdata, (short) (outdataoffset + r_size), s_size);
+       		 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 3), outdata, (short) (outdataoffset + p.length + p.length - s_size), s_size);
 				}
 				else{
-       	 				Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + r_size), s_size);
+					/* Sanity check */
+					if(s_size > p.length){
+                		        	ISOException.throwIt((short) 0xECE3);
+					}
+       	 				Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + p.length + p.length - s_size), s_size);
 				}
 			}
 			else{
-       	 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + r_size), s_size);
+				/* Sanity check */
+				if(s_size > p.length){
+               		        	ISOException.throwIt((short) 0xECE3);
+				}
+       	 			Util.arrayCopyNonAtomic(working_buffer, (short) (4 + working_buffer[3] + 2), outdata, (short) (outdataoffset + p.length + p.length - s_size), s_size);
 			}
-			siglen += s_size;
-			if(siglen != sigECDSAlen){
-       	 			Util.arrayCopyNonAtomic(working_buffer, (short) 0, outdata, outdataoffset, (short) working_buffer.length);
-				siglen = indatalen;
-			}
+			/* Our signature length is 2 Fp big numbers */
 			return siglen;
 		}
 		catch(CryptoException exception)
