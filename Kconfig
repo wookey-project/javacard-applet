@@ -41,6 +41,14 @@ config AUTH_TOKEN_USER_PIN
       Set the board unlocking PIN
       NOTE: this PIN can be changed in production
 
+config AUTH_TOKEN_SD_PWD
+   string "SDCard Password"
+   default "passwd"
+   ---help---
+     Set the SDCard password used as a basis to generate the SDCard
+     locking secret. The secret is per-SDCard based even with the
+     same initial password string
+
 config AUTH_TOKEN_MAX_PIN
    int "Maximum failed PIN tries"
    range 1 255

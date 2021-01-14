@@ -11,6 +11,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 
 	/* Instructions specific to the AUTH applet */
 	public static final byte TOKEN_INS_GET_KEY = (byte) 0x10;
+	public static final byte TOKEN_INS_GET_SDPWD = (byte) 0x11;
 
 	/* Variable handling initialization */
 	private static byte init_done = 0x55;
@@ -82,9 +83,12 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			/* Also send SHA-256(ESSIV master key) */
 			W.schannel.md.reset();
 			W.schannel.md.doFinal(Keys.MasterSecretKey, (short) 0, (short) 32, W.data, (short) 32);
-			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
+                        /* Provision the SD Card passwd */
+			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 64, (short) 16);
+
+			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 80, (short) 80);
 			/* Now send the encrypted APDU */
-			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 64, (short) 64, (byte) 0x90, (byte) 0x00);
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 80, (short) 80, (byte) 0x90, (byte) 0x00);
 			return;
 		}
 		else{
@@ -93,6 +97,33 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			return;
 		}
 	}
+
+    private void get_storage_pwd(APDU apdu, byte ins){
+		/* The user asks to get the sdcard pwd, the secure channel must be initialized */
+		if(W.schannel.is_secure_channel_initialized() == false){
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
+		if(data_len != 0){
+			/* We should not receive data in this command */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+			return;
+		}
+		/* We check that we are already unlocked */
+		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+		else{
+			//Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 64);
+			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 16);
+			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 16, (short) 16);
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 16, (short) 16, (byte) 0x90, (byte) 0x00);
+			return;
+		}
+    }
 
 	public void process(APDU apdu)
 	{
@@ -149,6 +180,9 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		{
 			case TOKEN_INS_GET_KEY:
 				get_key(apdu, TOKEN_INS_GET_KEY);
+				return;
+            case TOKEN_INS_GET_SDPWD:
+                get_storage_pwd(apdu, TOKEN_INS_GET_SDPWD);
 				return;
 			default:
                                 /* Send unsupported APDU, in the secure channel or not depending if it has been initialized */
