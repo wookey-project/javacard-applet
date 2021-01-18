@@ -41,7 +41,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		}
         }
 
-	private void get_key(APDU apdu, byte ins){
+	private void get_secret_data(APDU apdu, byte ins){
 		/* The user asks to get the master key and its derivative, the secure channel must be initialized */
 		if(W.schannel.is_secure_channel_initialized() == false){
 			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
@@ -78,18 +78,29 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			return;
 		}
                 if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
-			/* Decrypt with local storage sensitive data, which is the ESSIV master key */
-			local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 0, (short) 32, W.data, (short) 0);
-			/* Also send SHA-256(ESSIV master key) */
-			W.schannel.md.reset();
-			W.schannel.md.doFinal(Keys.MasterSecretKey, (short) 0, (short) 32, W.data, (short) 32);
-                        /* Provision the SD Card passwd */
-			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 64, (short) 16);
-
-			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 80, (short) 80);
-			/* Now send the encrypted APDU */
-			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 80, (short) 80, (byte) 0x90, (byte) 0x00);
-			return;
+			if(ins == TOKEN_INS_GET_KEY){
+				/* Decrypt with local storage sensitive data, which is the ESSIV master key */
+				local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 0, (short) 32, W.data, (short) 0);
+				/* Also send SHA-256(ESSIV master key) */
+				W.schannel.md.reset();
+				W.schannel.md.doFinal(W.data, (short) 0, (short) 32, W.data, (short) 32);
+				/* Now send the encrypted APDU */
+				W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
+				W.schannel.send_encrypted_apdu(apdu, W.data, (short) 64, (short) 64, (byte) 0x90, (byte) 0x00);
+				return;
+			}
+			else if(ins == TOKEN_INS_GET_SDPWD){
+				/* Decrypt with local storage sensitive data, which is the ESSIV master key */
+				local_msk_enc.Decrypt(Keys.SDPassword, (short) 0, (short) 16, W.data, (short) 0);
+				/* Now send the encrypted APDU */
+				W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 16, (short) 16);
+				W.schannel.send_encrypted_apdu(apdu, W.data, (short) 16, (short) 16, (byte) 0x90, (byte) 0x00);
+				return;
+			}
+			else{
+				W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
+				return;
+			}
 		}
 		else{
 			/* We are not authenticated, ask for an authentication */
@@ -97,33 +108,6 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			return;
 		}
 	}
-
-    private void get_storage_pwd(APDU apdu, byte ins){
-		/* The user asks to get the sdcard pwd, the secure channel must be initialized */
-		if(W.schannel.is_secure_channel_initialized() == false){
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
-			return;
-		}
-		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-		if(data_len != 0){
-			/* We should not receive data in this command */
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
-			return;
-		}
-		/* We check that we are already unlocked */
-		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
-			/* We are not authenticated, ask for an authentication */
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
-			return;
-		}
-		else{
-			//Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 64);
-			Util.arrayCopyNonAtomic(Keys.EncLocalSDPassword, (short) 0, W.data, (short) 0, (short) 16);
-			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 0, (short) 16, (short) 16);
-			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 16, (short) 16, (byte) 0x90, (byte) 0x00);
-			return;
-		}
-    }
 
 	public void process(APDU apdu)
 	{
@@ -159,6 +143,9 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			/* Locally encrypt our MSK */
 			local_msk_enc.Encrypt(Keys.MasterSecretKey, (short) 0, (short) Keys.MasterSecretKey.length, Keys.MasterSecretKey, (short) 0);	
 
+			/* Locally encrypt our SD storage password */
+			local_msk_enc.Encrypt(Keys.SDPassword, (short) 0, (short) Keys.SDPassword.length, Keys.SDPassword, (short) 0);	
+
 			init_done = (byte) 0xaa;
 		}
 
@@ -179,10 +166,10 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		switch (buffer[ISO7816.OFFSET_INS])
 		{
 			case TOKEN_INS_GET_KEY:
-				get_key(apdu, TOKEN_INS_GET_KEY);
+				get_secret_data(apdu, TOKEN_INS_GET_KEY);
 				return;
-            case TOKEN_INS_GET_SDPWD:
-                get_storage_pwd(apdu, TOKEN_INS_GET_SDPWD);
+			case TOKEN_INS_GET_SDPWD:
+				get_secret_data(apdu, TOKEN_INS_GET_SDPWD);
 				return;
 			default:
                                 /* Send unsupported APDU, in the secure channel or not depending if it has been initialized */
