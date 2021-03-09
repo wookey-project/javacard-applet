@@ -170,9 +170,8 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			return;
 		}
                 if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
-			/* FIXME: handle sensitive data decryption at reception */
-			/* Copy received data in second part */
-			Util.arrayCopyNonAtomic(W.data, (short) 0, W.data, (short) 32, (short) 32);
+			/* Handle sensitive data decryption at reception */
+			W.schannel.pin_decrypt_sensitive_data(W.data, W.data, (short) 0, (short) 32, (short) 32);
 			/* Second, we decrypt our FIDO half master key (in second part of data) */
 			local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 32, (short) 32, W.data, (short) 0);
 			/* Now compute and store in volatile memory SHA-256(token masterkey || platform masterkey) */

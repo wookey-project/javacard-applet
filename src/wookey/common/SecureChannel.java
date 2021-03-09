@@ -19,6 +19,7 @@ public class SecureChannel {
 	/* The secure channel parameters */
 	private byte[] secure_channel_initialized = null;
 	private byte[] IV = null;
+	private byte[] old_IV = null;
 	private byte[] first_IV = null;
 	private byte[] AES_key = null;
 	private byte[] HMAC_key = null;
@@ -149,6 +150,7 @@ public class SecureChannel {
 		 */
 		PIN_key = JCSystem.makeTransientByteArray((short) (32), JCSystem.CLEAR_ON_DESELECT);
 		IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
+		old_IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		first_IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		tmp = JCSystem.makeTransientByteArray(BN_len, JCSystem.CLEAR_ON_DESELECT);
 	}
@@ -177,6 +179,7 @@ public class SecureChannel {
 		Util.arrayFillNonAtomic(HMAC_key, (short) 0, (short) HMAC_key.length, (byte) 0);
 		Util.arrayFillNonAtomic(PIN_key, (short) 0, (short) PIN_key.length, (byte) 0);
 		Util.arrayFillNonAtomic(IV, (short) 0, (short) IV.length, (byte) 0);
+		Util.arrayFillNonAtomic(old_IV, (short) 0, (short) IV.length, (byte) 0);
 		Util.arrayFillNonAtomic(first_IV, (short) 0, (short) first_IV.length, (byte) 0);
 		Util.arrayFillNonAtomic(tmp, (short) 0, (short) tmp.length, (byte) 0);
 		Util.arrayFillNonAtomic(working_buffer, (short) 0, (short) working_buffer.length, (byte) 0);
@@ -292,6 +295,10 @@ public class SecureChannel {
 			close_secure_channel();
 			ISOException.throwIt((short) 0xAAAA);
 		}
+
+		/* Save old IV */
+		Util.arrayCopyNonAtomic(IV, (short) 0, old_IV, (short) 0, (short) IV.length);
+
 		/* HMAC context */
 		hmac_ctx.hmac_init(HMAC_key, (short) 0, (short) HMAC_key.length);
 		/* Prepend the IV */
@@ -367,6 +374,9 @@ public class SecureChannel {
 			close_secure_channel();
 			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 		}
+
+		/* Save old IV */
+		Util.arrayCopyNonAtomic(IV, (short) 0, old_IV, (short) 0, (short) IV.length);
 
 		/* HMAC context */
 		hmac_ctx.hmac_init(HMAC_key, (short) 0, (short) HMAC_key.length);
@@ -447,8 +457,8 @@ public class SecureChannel {
 		md.reset();
 		md.update(first_IV, (short) 0, (short) first_IV.length);
 		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
-		/* AES-128 CBC decrypt */
-		aes_cbc_ctx.aes_init(PIN_key, IV, Aes.DECRYPT);
+		/* AES-128 CBC decrypt (we use the old IV) */
+		aes_cbc_ctx.aes_init(PIN_key, old_IV, Aes.DECRYPT);
 		aes_cbc_ctx.aes(input, input_offset, len, output, output_offset);
 	}
 }
