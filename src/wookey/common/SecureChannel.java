@@ -438,5 +438,18 @@ public class SecureChannel {
 		aes_cbc_ctx.aes_init(PIN_key, IV, Aes.ENCRYPT);
 		aes_cbc_ctx.aes(input, input_offset, len, output, output_offset);
 	}
+
+	public void pin_decrypt_sensitive_data(byte[] input, byte[] output, short input_offset, short output_offset, short len){
+                /* In order to avoid fault attacks, we decrypt sensitive data
+                 * with a key derived from the 'real' PIN: a 128-bit AES key as the first half of
+                 * SHA-256(first_IV ||PIN_KEY_prefix) = SHA-256(first_IV || SHA-256(PIN))
+                 */
+		md.reset();
+		md.update(first_IV, (short) 0, (short) first_IV.length);
+		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
+		/* AES-128 CBC decrypt */
+		aes_cbc_ctx.aes_init(PIN_key, IV, Aes.DECRYPT);
+		aes_cbc_ctx.aes(input, input_offset, len, output, output_offset);
+	}
 }
 

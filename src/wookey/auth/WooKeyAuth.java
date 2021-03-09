@@ -13,6 +13,17 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	public static final byte TOKEN_INS_GET_KEY = (byte) 0x10;
 	public static final byte TOKEN_INS_GET_SDPWD = (byte) 0x11;
 
+        /* Instructions specific to the AUTH FIDO profile */
+        public static final byte[] U2F2Profile = { (byte)0x75, (byte)0x32, (byte)0x66, (byte)0x32, };
+	public static final byte TOKEN_INS_FIDO_SEND_PKEY    = (byte) 0x12;
+	public static final byte TOKEN_INS_FIDO_REGISTER     = (byte) 0x13;
+	public static final byte TOKEN_INS_FIDO_AUTHENTICATE = (byte) 0x14;
+	public static final byte TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY = (byte) 0x15;
+	private static byte[] FIDOFullMasterKey = null;
+	private static boolean FIDOFullMasterKey_init = false;
+        /* Random data instance */
+        private static RandomData random = null;
+
 	/* Variable handling initialization */
 	private static byte init_done = 0x55;
 
@@ -24,6 +35,10 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	public static void install(byte[] bArray,
                                short bOffset, byte bLength)
 	{		
+		FIDOFullMasterKey = JCSystem.makeTransientByteArray((short) 32, JCSystem.CLEAR_ON_DESELECT);
+                /* Random instance */
+                random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+
  		new WooKeyAuth();
 	}
 
@@ -109,6 +124,236 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		}
 	}
 
+	/************************************************************/
+	/************************************************************/
+	/************************************************************/
+	/* FIDO case: receive platform key */
+	private void fido_receive_pkey(APDU apdu, byte ins){
+		/* This command should not be triggered! (not U2F2 profile) */
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		/* The user sends his private half key, the secure channel must be initialized */
+		if(W.schannel.is_secure_channel_initialized() == false){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
+		if(data_len != 32){
+			/* We should receive exactly 32 bytes with this command */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+			return;
+		}
+		/* We check that we are already unlocked */
+		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false)){
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        }
+                }
+                else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
+			/* FIXME: handle sensitive data decryption at reception */
+			/* Copy received data in second part */
+			Util.arrayCopyNonAtomic(W.data, (short) 0, W.data, (short) 32, (short) 32);
+			/* Second, we decrypt our FIDO half master key (in second part of data) */
+			local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 32, (short) 32, W.data, (short) 0);
+			/* Now compute and store in volatile memory SHA-256(token masterkey || platform masterkey) */
+			W.schannel.md.reset();
+			W.schannel.md.doFinal(W.data, (short) 0, (short) 64, FIDOFullMasterKey, (short) 0);
+			FIDOFullMasterKey_init = true;
+			/* Answer that we are OK */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
+			return;
+		}
+		else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+	}
+
+	/* FIDO case: register, we generate a key handle and derive an ECDSA key */
+	private void fido_register(APDU apdu, byte ins){
+		/* This command should not be triggered! (not U2F2 profile) */
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		/* The user asks for FIDO register, the secure channel must be initialized */
+		if(W.schannel.is_secure_channel_initialized() == false){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
+		if(data_len != 32){
+			/* We should receive exactly 32 bytes with this command, corresponding
+			 * to a FIDO application parameter size
+			 */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+			return;
+		}
+		/* We check that we are already unlocked */
+		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false) || (FIDOFullMasterKey_init == false)){
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        	if(FIDOFullMasterKey_init == true){
+                        	}
+			}
+                }
+                else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true) && (FIDOFullMasterKey_init == true)){
+			/* First, generate a Key Handle from our FIDO MasterKey.
+			 *   1. We get a 32 bytes random NONCE
+			 *   2. The key handle is 64 bytes concatenation of NONCE || HMAC(APP_PARAMETER || NONCE),
+			 *      where HMAC is performed with our mixed master key.
+			 *   3. The ECDSA private key is the computed HMAC(Key Handle) with our mixed master key
+			 *   4. Send back [NONCE || HMAC(APP_PARAMETER || NONCE)] || ECDSA_priv_key
+			 */
+			/* 1. Generate NONCE */
+			random.generateData(W.data, (short) 32, (short) 32);
+			/* 2. Compute Key Handle */
+			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 0, (short) 64);
+			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 64);
+			/* 3. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
+			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 32, (short) 64);
+			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
+			/* 4. Send the response [NONCE || HMAC(APP_PARAMETER || NONCE)] || ECDSA_priv_key */
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 32, (short) 96, (byte) 0x90, (byte) 0x00);
+			return;
+		}
+		else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+	}
+
+	/* FIDO case: authenticate, we check a key handle and possibly generate the associated ECDSA private key */
+	private void fido_authenticate(APDU apdu, byte ins){
+		/* This command should not be triggered! (not U2F2 profile) */
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		/* The user asks for FIDO register, the secure channel must be initialized */
+		if(W.schannel.is_secure_channel_initialized() == false){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
+		if(data_len != 96){
+			/* We should receive exactly 96 bytes with this command, corresponding
+			 * to a FIDO application parameter (32 bytes) plus a key handle (64 bytes)
+			 */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+			return;
+		}
+		/* We check that we are already unlocked */
+		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false) || (FIDOFullMasterKey_init == false)){
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        	if(FIDOFullMasterKey_init == true){
+                        	}
+			}
+                }
+                else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true) && (FIDOFullMasterKey_init == true)){
+			/* 
+			 *   1. Check our Key Handle authenticity NONCE || HMAC(APP_PARAMETER || NONCE).
+			 *   2. Return OK or not OK if CHECK ONLY
+			 *   3. Compute the ECDSA private key from the Key Handle
+			 */
+			/* 1. Check our Key Handle authenticity */
+			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 0, (short) 64);
+			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
+			if(Util.arrayCompare(W.data, (short) 64, W.data, (short) 96, (short) 32) != 0){
+				/* Bad HMAC, Key Handle seems bad, return NOK */
+				W.data[0] = 0x00;
+				W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 1, (byte) 0x90, (byte) 0x00);
+				return;
+			}
+			/* 2. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
+			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 32, (short) 64);
+			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
+			switch(ins){
+				case TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY:
+					/* Send OK */
+					W.data[0] = 0x01;
+					W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 1, (byte) 0x90, (byte) 0x00);
+					return;
+                        	case TOKEN_INS_FIDO_AUTHENTICATE:
+					/* 4. Send the response ECDSA_priv_key */
+					W.schannel.send_encrypted_apdu(apdu, W.data, (short) 96, (short) 32, (byte) 0x90, (byte) 0x00);
+					return;
+				default:
+					/* Send not OK */
+					W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
+					return;
+			}
+		}
+		else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+	}
+
 	public void process(APDU apdu)
 	{
 		/* Self destroy? */
@@ -171,6 +416,30 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			case TOKEN_INS_GET_SDPWD:
 				get_secret_data(apdu, TOKEN_INS_GET_SDPWD);
 				return;
+                        case TOKEN_INS_FIDO_SEND_PKEY:
+				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+					fido_receive_pkey(apdu, TOKEN_INS_FIDO_SEND_PKEY);
+					return;
+				}
+				break;
+                        case TOKEN_INS_FIDO_REGISTER:
+				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+					fido_register(apdu, TOKEN_INS_FIDO_REGISTER);
+					return;
+				}
+				break;
+                        case TOKEN_INS_FIDO_AUTHENTICATE:
+				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+					fido_authenticate(apdu, TOKEN_INS_FIDO_AUTHENTICATE);
+					return;
+				}
+				break;
+                        case TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY:
+				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+					fido_authenticate(apdu, TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY);
+					return;
+				}
+				break;
 			default:
                                 /* Send unsupported APDU, in the secure channel or not depending if it has been initialized */
                                 if(W.schannel.is_secure_channel_initialized() == true){
