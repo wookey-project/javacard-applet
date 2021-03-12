@@ -300,6 +300,10 @@ public class WooKey
 		}
 		else{
 			/* PIN is OK: send that all is good, with the remaining pins as information */
+			/* NOTE: Now that the legitimate user is authenticated, we can disable HMAC
+			 * and AES masking for better perofrmance.
+			 */
+			schannel.disable_masking();
 			byte tmp = data[0]; 
 			data[0] = pin.getTriesRemaining();
 			schannel.send_encrypted_apdu(apdu, data, (short) 0, (short) 1, (byte) 0x90, (byte) 0x00);
@@ -479,6 +483,10 @@ public class WooKey
 			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
+
+		/* Reenable masking */
+		schannel.enable_masking();
+
 		/* If the session is not unlocked, we have nothing to do, else we lock it */
 		if(user_pin.isValidated() == true){
 			/* Double check against faults */
@@ -512,6 +520,10 @@ public class WooKey
 			schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, SW1_WARNING, (byte) 0x01);
 			return;
 		}
+
+		/* Reenable masking */
+		schannel.enable_masking();
+
 		/* If the session is not unlocked, we have nothing to do, else we lock it */
 		if(user_pin.isValidated() == true){
 			/* Double check against faults */
