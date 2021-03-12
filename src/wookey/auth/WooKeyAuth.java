@@ -178,8 +178,10 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			W.schannel.md.reset();
 			W.schannel.md.doFinal(W.data, (short) 0, (short) 64, FIDOFullMasterKey, (short) 0);
 			FIDOFullMasterKey_init = true;
-			/* Answer that we are OK */
-			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
+			/* Answer that we are OK, with half of the FIDO ECDSA attestation private key */
+			local_msk_enc.Decrypt(Keys.FidoHalfPrivKey, (short) 0, (short) 16, W.data, (short) 16);
+			W.schannel.pin_encrypt_sensitive_data(W.data, W.data, (short) 16, (short) 0, (short) 16);
+			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 16, (byte) 0x90, (byte) 0x00);
 			return;
 		}
 		else{
@@ -398,6 +400,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 
 			/* Locally encrypt our SD storage password */
 			local_msk_enc.Encrypt(Keys.SDPassword, (short) 0, (short) Keys.SDPassword.length, Keys.SDPassword, (short) 0);	
+
+			if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+				/* Locally encrypt our FIDO half private key */
+				local_msk_enc.Encrypt(Keys.FidoHalfPrivKey, (short) 0, (short) Keys.FidoHalfPrivKey.length, Keys.FidoHalfPrivKey, (short) 0);
+			}
 
 			init_done = (byte) 0xaa;
 		}
