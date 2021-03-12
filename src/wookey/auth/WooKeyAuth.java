@@ -320,26 +320,35 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
 			W.schannel.hmac_ctx.hmac_update(W.data, (short) 0, (short) 64);
 			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
-			if(Util.arrayCompare(W.data, (short) 64, W.data, (short) 96, (short) 32) != 0){
-				/* Bad HMAC, Key Handle seems bad, return NOK */
-				W.data[0] = 0x00;
-				W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 1, (byte) 0x90, (byte) 0x00);
-				return;
-			}
-			/* 2. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
-			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
-			W.schannel.hmac_ctx.hmac_update(W.data, (short) 32, (short) 64);
-			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
 			switch(ins){
 				case TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY:
-					/* Send OK */
-					W.data[0] = 0x01;
+					if(Util.arrayCompare(W.data, (short) 64, W.data, (short) 96, (short) 32) != 0){
+						/* Bad HMAC, Key Handle seems bad, return NOK */
+						W.data[0] = 0x00;
+					}
+					else{
+						/* Send OK */
+						W.data[0] = 0x01;
+					}
 					W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 1, (byte) 0x90, (byte) 0x00);
 					return;
                         	case TOKEN_INS_FIDO_AUTHENTICATE:
-					/* 4. Send the response ECDSA_priv_key */
-					W.schannel.send_encrypted_apdu(apdu, W.data, (short) 96, (short) 32, (byte) 0x90, (byte) 0x00);
-					return;
+					if(Util.arrayCompare(W.data, (short) 64, W.data, (short) 96, (short) 32) != 0){
+						/* Bad HMAC, Key Handle seems bad, return NOK */
+						W.data[0] = 0x00;
+						W.schannel.send_encrypted_apdu(apdu, W.data, (short) 0, (short) 1, (byte) 0x90, (byte) 0x00);
+						return;
+					}
+					else{
+
+						/* 2. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
+						W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
+						W.schannel.hmac_ctx.hmac_update(W.data, (short) 32, (short) 64);
+						W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
+						/* 4. Send the response ECDSA_priv_key */
+						W.schannel.send_encrypted_apdu(apdu, W.data, (short) 96, (short) 32, (byte) 0x90, (byte) 0x00);
+						return;
+					}
 				default:
 					/* Send not OK */
 					W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
