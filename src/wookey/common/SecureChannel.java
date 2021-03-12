@@ -166,13 +166,21 @@ public class SecureChannel {
 		/* Make this a transaction */
                 JCSystem.beginTransaction();
 		secure_channel_initialized[0] = (byte)0xaa;
-		secure_channel_initialized[1] = (byte)0x55;	
+		secure_channel_initialized[1] = (byte)0x55;
+		/* When the secure channel is opened, we can release pressure on AES and HMAC
+		 * masking for better performance.
+		 */
+		hmac_ctx.disable_masking();
+		aes_ctr_ctx.disable_masking();
 		JCSystem.commitTransaction();
 		return;
 	}
 
 	public void close_secure_channel(){
 		secure_channel_initialized[0] = secure_channel_initialized[1] = (byte)0x00;
+		/* Reenable masking */
+		hmac_ctx.enable_masking();
+		aes_ctr_ctx.enable_masking();
 		/* Erase our local sensitive data */
 		Util.arrayFillNonAtomic(ECDHSharedSecret, (short) 0, (short) ECDHSharedSecret.length, (byte) 0);
 		Util.arrayFillNonAtomic(AES_key, (short) 0, (short) AES_key.length, (byte) 0);
