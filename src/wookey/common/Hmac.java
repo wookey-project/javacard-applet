@@ -36,8 +36,7 @@ public class Hmac {
 	 * first applet selection when eeprom is initialized by the applet ...
 	 * (masking has been tested to be working on NXP J3D081 smart cards)
 	 */
-        private static final boolean DISABLE_MASKING = false;
-	private byte USE_HMAC_MASKING = 0x55;
+	private static final boolean USE_HMAC_MASKING = true;
         private RandomData random = null;
 	private byte[] orig_ipad_masks = null;
 	private byte[] orig_opad_masks = null;
@@ -50,17 +49,9 @@ public class Hmac {
 	 */
 	private byte[] permutation = null;
 
-	public void enable_masking(){
-		USE_HMAC_MASKING = (byte)0x55;
-		return;
-	}
-	public void disable_masking(){
-		USE_HMAC_MASKING = (byte)0xaa;
-		return;
-	}
         /* Knuth shuffles to generate a random permutation */
         void gen_permutation(byte[] permutation, short size, byte[] tmp){
-                if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+                if(USE_HMAC_MASKING == true){
                         if(random == null){
                                 /* Initialize the secure random source */
                                 random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
@@ -173,7 +164,7 @@ public class Hmac {
 					ipad = JCSystem.makeTransientByteArray((short) (2 * md_i.getLength()), JCSystem.CLEAR_ON_DESELECT);
 					opad = JCSystem.makeTransientByteArray((short) (2 * md_i.getLength()), JCSystem.CLEAR_ON_DESELECT);
 					/**/
-                			if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+					if(USE_HMAC_MASKING == true){
 						random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
 						orig_ipad_masks = new byte[ipad.length];
 						random.generateData(orig_ipad_masks, (short) 0, (short) orig_ipad_masks.length);
@@ -209,7 +200,7 @@ public class Hmac {
 				md_o.reset();
 				short perm_length = 0;
 	
-                		if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+				if(USE_HMAC_MASKING == true){
 					if(key_length > ipad.length){
 						perm_length = (short) ipad.length;
 					}
@@ -249,7 +240,7 @@ public class Hmac {
 					local_md.doFinal(ipad, (short) 0, (short) 0, local_key, (short) 0);
 					for(i = 0; i < ipad.length; i++){
 						if(i < local_key.length){
-                					if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+							if(USE_HMAC_MASKING == true){
 								short i_perm = (short) permutation[i];
 								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
 								ipad[i_perm] ^= (local_key[i_perm] ^ msk);
@@ -262,7 +253,7 @@ public class Hmac {
 							}
 						}
 						else{
-                					if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+							if(USE_HMAC_MASKING == true){
 								short i_perm = (short) permutation[i];
 								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
 								ipad[i_perm] ^= msk;
@@ -280,7 +271,7 @@ public class Hmac {
 					/* Key length is <= block size */
 					for(i = 0; i < ipad.length; i++){
 						if(i < key_length){
-                					if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+							if(USE_HMAC_MASKING == true){
 								short i_perm = permutation[i];
 								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
 								ipad[i_perm] ^= (key[(short)(key_offset + i_perm)] ^ msk);
@@ -293,7 +284,7 @@ public class Hmac {
 							}
 						}
 						else{
-                					if((DISABLE_MASKING == false) && (USE_HMAC_MASKING != (byte)0xaa)){
+							if(USE_HMAC_MASKING == true){
 								short i_perm = permutation[i];
 								byte msk = (byte)(ipad_masks[i_perm] ^ orig_ipad_masks[i_perm] ^ 0x36);
 								ipad[i_perm] ^= msk;

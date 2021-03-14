@@ -44,13 +44,13 @@ public class SecureChannel {
 	public MessageDigest md = null;
 
 
+	/* Disable costly AES-CTR masking */
 	public void disable_masking(){
-		hmac_ctx.disable_masking();
 		aes_ctr_ctx.disable_masking();
 	}
 
+	/* Enable costly AES-CTR masking */
 	public void enable_masking(){
-		hmac_ctx.enable_masking();
 		aes_ctr_ctx.enable_masking();
 	}
 
