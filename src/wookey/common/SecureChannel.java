@@ -19,6 +19,7 @@ public class SecureChannel {
 	/* The secure channel parameters */
 	private byte[] secure_channel_initialized = null;
 	private byte[] IV = null;
+	public byte[] old_IV = null;
 	private byte[] first_IV = null;
 	private byte[] AES_key = null;
 	private byte[] HMAC_key = null;
@@ -42,6 +43,18 @@ public class SecureChannel {
 	public Aes aes_cbc_ctx = null;
 	public MessageDigest md = null;
 
+
+	/* Disable costly AES-CTR and HMAC masking */
+	public void disable_masking(){
+		hmac_ctx.disable_masking();
+		aes_ctr_ctx.disable_masking();
+	}
+
+	/* Enable costly AES-CTR and HMAC masking */
+	public void enable_masking(){
+		hmac_ctx.enable_masking();
+		aes_ctr_ctx.enable_masking();
+	}
 
 	/* Self destruction operation */
 	public void self_destroy_card(){
@@ -149,6 +162,7 @@ public class SecureChannel {
 		 */
 		PIN_key = JCSystem.makeTransientByteArray((short) (32), JCSystem.CLEAR_ON_DESELECT);
 		IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
+		old_IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		first_IV = JCSystem.makeTransientByteArray((short) (16), JCSystem.CLEAR_ON_DESELECT);
 		tmp = JCSystem.makeTransientByteArray(BN_len, JCSystem.CLEAR_ON_DESELECT);
 	}
@@ -164,19 +178,22 @@ public class SecureChannel {
 		/* Make this a transaction */
                 JCSystem.beginTransaction();
 		secure_channel_initialized[0] = (byte)0xaa;
-		secure_channel_initialized[1] = (byte)0x55;	
+		secure_channel_initialized[1] = (byte)0x55;
 		JCSystem.commitTransaction();
 		return;
 	}
 
 	public void close_secure_channel(){
 		secure_channel_initialized[0] = secure_channel_initialized[1] = (byte)0x00;
+		/* Reenable masking */
+		enable_masking();
 		/* Erase our local sensitive data */
 		Util.arrayFillNonAtomic(ECDHSharedSecret, (short) 0, (short) ECDHSharedSecret.length, (byte) 0);
 		Util.arrayFillNonAtomic(AES_key, (short) 0, (short) AES_key.length, (byte) 0);
 		Util.arrayFillNonAtomic(HMAC_key, (short) 0, (short) HMAC_key.length, (byte) 0);
 		Util.arrayFillNonAtomic(PIN_key, (short) 0, (short) PIN_key.length, (byte) 0);
 		Util.arrayFillNonAtomic(IV, (short) 0, (short) IV.length, (byte) 0);
+		Util.arrayFillNonAtomic(old_IV, (short) 0, (short) IV.length, (byte) 0);
 		Util.arrayFillNonAtomic(first_IV, (short) 0, (short) first_IV.length, (byte) 0);
 		Util.arrayFillNonAtomic(tmp, (short) 0, (short) tmp.length, (byte) 0);
 		Util.arrayFillNonAtomic(working_buffer, (short) 0, (short) working_buffer.length, (byte) 0);
@@ -292,6 +309,10 @@ public class SecureChannel {
 			close_secure_channel();
 			ISOException.throwIt((short) 0xAAAA);
 		}
+
+		/* Save old IV */
+		Util.arrayCopyNonAtomic(IV, (short) 0, old_IV, (short) 0, (short) IV.length);
+
 		/* HMAC context */
 		hmac_ctx.hmac_init(HMAC_key, (short) 0, (short) HMAC_key.length);
 		/* Prepend the IV */
@@ -368,6 +389,9 @@ public class SecureChannel {
 			ISOException.throwIt((short) (((short)sw1 << 8) ^ (short)(sw2 & 0x00ff)));
 		}
 
+		/* Save old IV */
+		Util.arrayCopyNonAtomic(IV, (short) 0, old_IV, (short) 0, (short) IV.length);
+
 		/* HMAC context */
 		hmac_ctx.hmac_init(HMAC_key, (short) 0, (short) HMAC_key.length);
 		/* Prepend the IV when computing the HMAC */
@@ -436,6 +460,19 @@ public class SecureChannel {
 		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
 		/* AES-128 CBC encrypt */
 		aes_cbc_ctx.aes_init(PIN_key, IV, Aes.ENCRYPT);
+		aes_cbc_ctx.aes(input, input_offset, len, output, output_offset);
+	}
+
+	public void pin_decrypt_sensitive_data(byte[] input, byte[] output, short input_offset, short output_offset, short len){
+                /* In order to avoid fault attacks, we decrypt sensitive data
+                 * with a key derived from the 'real' PIN: a 128-bit AES key as the first half of
+                 * SHA-256(first_IV ||PIN_KEY_prefix) = SHA-256(first_IV || SHA-256(PIN))
+                 */
+		md.reset();
+		md.update(first_IV, (short) 0, (short) first_IV.length);
+		md.doFinal(PIN_KEY_prefix, (short) 0, (short) PIN_KEY_prefix.length, PIN_key, (short) 0);
+		/* AES-128 CBC decrypt (we use the old IV) */
+		aes_cbc_ctx.aes_init(PIN_key, old_IV, Aes.DECRYPT);
 		aes_cbc_ctx.aes(input, input_offset, len, output, output_offset);
 	}
 }

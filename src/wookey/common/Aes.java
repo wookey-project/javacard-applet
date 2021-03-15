@@ -15,7 +15,8 @@ public class Aes {
 	 * [RB] NOTE: if you have memory "pressure" on your javacard, you can turn
 	 * this off with a 'false' here at the expense of security of course ...
 	 */
-	static final boolean USE_AES_CTR_MASKING = true;
+	private static final boolean DISABLE_MASKING = false;
+	private byte USE_AES_CTR_MASKING = 0x55;
 	/* Current AES mode (ECB, CBC, CTR) */
 	private byte mode;
 	/* Direction */
@@ -36,11 +37,19 @@ public class Aes {
 	private byte[] ctr_permutation = null;
 	private RandomData random = null;
 	/* Local masks to mask CTR xoring */
-	private byte[] ctr_masks = null;	
+	private byte[] ctr_masks = null;
 
+        public void enable_masking(){
+                USE_AES_CTR_MASKING = (byte)0x55;
+                return;
+        }
+        public void disable_masking(){
+                USE_AES_CTR_MASKING = (byte)0xaa;
+                return;
+        }
 	/* Knuth shuffles to generate a random permutation */
 	void gen_permutation(byte[] permutation, short size){
-		if(USE_AES_CTR_MASKING == true){
+		if((DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 			if(random == null){
 				/* Initialize the secure random source */
 				random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
@@ -74,7 +83,7 @@ public class Aes {
 	}
 	/* Generate random masks */
 	void gen_masks(byte[] masks, short size){
-		if(USE_AES_CTR_MASKING == true){
+		if((DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 			if(random == null){
 				/* Initialize the secure random source */
 				random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
@@ -90,7 +99,7 @@ public class Aes {
 	protected Aes(short key_len, byte asked_mode){
 		iv = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		last_block = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
-		if(USE_AES_CTR_MASKING == true){
+		if((DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 			tmp = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		}
 		try{
@@ -141,7 +150,7 @@ public class Aes {
 				aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES_TRANSIENT_DESELECT, key_builder, false);
 			}
 			/* If in CTR mode, we use a random 16 bytes to 16 bytes permutation for Xoring */
-			if((asked_mode == CTR) && (USE_AES_CTR_MASKING == true)){
+			if((asked_mode == CTR) && (DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 				ctr_permutation = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);	
 				ctr_masks = JCSystem.makeTransientByteArray(AES_BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);	
 			}
@@ -330,7 +339,7 @@ public class Aes {
 					}
 					/* Initialize offset to the last session ofset */
 					offset = last_offset;
-					if(USE_AES_CTR_MASKING == true){
+					if((DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 						if(last_offset != 0){
 							/* First block handling */
 							/* Generate a random permutation */
@@ -342,7 +351,7 @@ public class Aes {
 					short num_blocks = 0;
 					for (i = 0; i < inputlen; i++){
 						if(offset == 0){
-							if(USE_AES_CTR_MASKING == true){
+							if((DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 								short perm_size;
 								num_blocks++;
 								if(((short)(inputlen - i) < AES_BLOCK_SIZE) && (inputlen % AES_BLOCK_SIZE != 0)){
@@ -361,7 +370,7 @@ public class Aes {
 							/* Increment the counter */
 							increment_iv();
 						}
-						if(USE_AES_CTR_MASKING == true){
+						if((DISABLE_MASKING == false) && (USE_AES_CTR_MASKING != (byte)0xaa)){
 							short i_perm, offset_perm;
 							if((last_offset != 0) && (i < (short) (AES_BLOCK_SIZE - last_offset))){
                 					        /* First block handling */
