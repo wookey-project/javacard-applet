@@ -148,8 +148,8 @@ public class WooKeyAuth extends Applet implements ExtendedLength
                         return;
                 }
 		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-		if(data_len != 32){
-			/* We should receive exactly 32 bytes with this command */
+		if(data_len != 64){
+			/* We should receive exactly 64 bytes with this command */
 			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
 			return;
 		}
@@ -171,12 +171,22 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		}
                 if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
 			/* Handle sensitive data decryption at reception */
-			W.schannel.pin_decrypt_sensitive_data(W.data, W.data, (short) 0, (short) 32, (short) 32);
+			W.schannel.pin_decrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
 			/* Second, we decrypt our FIDO half master key (in second part of data) */
 			local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 32, (short) 32, W.data, (short) 0);
+			/* Compute the HMAC of received data and check it */
+			W.schannel.hmac_ctx.hmac_init(W.data, (short) 0, (short) 32);			
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 64, (short) 32);
+			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 0);
+			/* Compare the computed HMAC with the received one */
+			if(Util.arrayCompare(W.data, (short) 0, W.data, (short) 96, (short) 32) != 0){
+				W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
+				return;
+			}
 			/* Now compute and store in volatile memory SHA-256(token masterkey || platform masterkey) */
 			W.schannel.md.reset();
-			W.schannel.md.doFinal(W.data, (short) 0, (short) 64, FIDOFullMasterKey, (short) 0);
+			W.schannel.md.update(W.data, (short) 0, (short) 32);
+			W.schannel.md.doFinal(W.data, (short) 64, (short) 32, FIDOFullMasterKey, (short) 0);
 			FIDOFullMasterKey_init = true;
 			/* Answer that we are OK, with half of the FIDO ECDSA attestation private key */
 			local_msk_enc.Decrypt(Keys.FidoHalfPrivKey, (short) 0, (short) 16, W.data, (short) 16);
