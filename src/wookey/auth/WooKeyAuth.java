@@ -19,6 +19,8 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	public static final byte TOKEN_INS_FIDO_REGISTER     = (byte) 0x13;
 	public static final byte TOKEN_INS_FIDO_AUTHENTICATE = (byte) 0x14;
 	public static final byte TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY = (byte) 0x15;
+	public static final byte TOKEN_INS_FIDO_GET_REPLAY_COUNTER = (byte) 0x16;
+	public static final byte TOKEN_INS_FIDO_SET_REPLAY_COUNTER = (byte) 0x17;
 	private static byte[] FIDOFullMasterKey = null;
 	private static boolean FIDOFullMasterKey_init = false;
         /* Random data instance */
@@ -26,6 +28,9 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 
 	/* Variable handling initialization */
 	private static byte init_done = 0x55;
+
+	/* Variable handling anti-replay counter for FIDO storage */
+	private static byte[] fido_replay_counter = { (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00 };
 
 	/* NOTE: we use our local enryption class for
 	 * local protection of sensitive assets (the MSK in this case).
@@ -148,8 +153,8 @@ public class WooKeyAuth extends Applet implements ExtendedLength
                         return;
                 }
 		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
-		if(data_len != 32){
-			/* We should receive exactly 32 bytes with this command */
+		if(data_len != 64){
+			/* We should receive exactly 64 bytes with this command */
 			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
 			return;
 		}
@@ -171,12 +176,22 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		}
                 if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true)){
 			/* Handle sensitive data decryption at reception */
-			W.schannel.pin_decrypt_sensitive_data(W.data, W.data, (short) 0, (short) 32, (short) 32);
+			W.schannel.pin_decrypt_sensitive_data(W.data, W.data, (short) 0, (short) 64, (short) 64);
 			/* Second, we decrypt our FIDO half master key (in second part of data) */
 			local_msk_enc.Decrypt(Keys.MasterSecretKey, (short) 32, (short) 32, W.data, (short) 0);
+			/* Compute the HMAC of received data and check it */
+			W.schannel.hmac_ctx.hmac_init(W.data, (short) 0, (short) 32);			
+			W.schannel.hmac_ctx.hmac_update(W.data, (short) 64, (short) 32);
+			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 0);
+			/* Compare the computed HMAC with the received one */
+			if(Util.arrayCompare(W.data, (short) 0, W.data, (short) 96, (short) 32) != 0){
+				W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
+				return;
+			}
 			/* Now compute and store in volatile memory SHA-256(token masterkey || platform masterkey) */
 			W.schannel.md.reset();
-			W.schannel.md.doFinal(W.data, (short) 0, (short) 64, FIDOFullMasterKey, (short) 0);
+			W.schannel.md.update(W.data, (short) 0, (short) 32);
+			W.schannel.md.doFinal(W.data, (short) 64, (short) 32, FIDOFullMasterKey, (short) 0);
 			FIDOFullMasterKey_init = true;
 			/* Answer that we are OK, with half of the FIDO ECDSA attestation private key */
 			local_msk_enc.Decrypt(Keys.FidoHalfPrivKey, (short) 0, (short) 16, W.data, (short) 16);
@@ -364,6 +379,120 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		}
 	}
 
+	/* FIDO case: get the antireplay counter */
+	private void fido_get_replay_counter(APDU apdu, byte ins){
+		/* This command should not be triggered! (not U2F2 profile) */
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		/* The user asks for the FIDO replay counter, the secure channel must be initialized */
+		if(W.schannel.is_secure_channel_initialized() == false){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
+		if(data_len != 0){
+			/* We should not receive data here.
+			 */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+			return;
+		}
+		/* We check that we are already unlocked */
+		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false) || (FIDOFullMasterKey_init == false)){
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        	if(FIDOFullMasterKey_init == true){
+                        	}
+			}
+                }
+                else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true) && (FIDOFullMasterKey_init == true)){
+			/* Sent back our anti-replay counter value */
+			W.schannel.send_encrypted_apdu(apdu, fido_replay_counter, (short) 0, (short) fido_replay_counter.length, (byte) 0x90, (byte) 0x00);	
+			return;
+		}
+		else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+	}
+	/* FIDO case: set the antireplay counter */
+	private void fido_set_replay_counter(APDU apdu, byte ins){
+		/* This command should not be triggered! (not U2F2 profile) */
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		/* The user asks to set the FIDO replay counter, the secure channel must be initialized */
+		if(W.schannel.is_secure_channel_initialized() == false){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+                if(W.sc_checkpoint[0] != (byte)0xaa){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+                if(W.sc_checkpoint[1] != (byte)0x55){
+                        W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+                        return;
+                }
+		short data_len = W.schannel.receive_encrypted_apdu(apdu, W.data);
+		if(data_len != fido_replay_counter.length){
+			/* We should receive exactly the anti-replay size (8 bytes) of data here.
+			 */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x01);
+			return;
+		}
+		/* We check that we are already unlocked */
+		if((W.pet_pin.isValidated() == false) || (W.user_pin.isValidated() == false) || (FIDOFullMasterKey_init == false)){
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                /* Double check against faults */
+                if(W.pet_pin.isValidated() == true){
+                        if(W.user_pin.isValidated() == true){
+                        	if(FIDOFullMasterKey_init == true){
+                        	}
+			}
+                }
+                else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+                if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true) && (FIDOFullMasterKey_init == true)){
+			/* Set the antireplay counter with input data */
+			Util.arrayCopyNonAtomic(W.data, (short) 0, fido_replay_counter, (short) 0, data_len);
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, (byte) 0x90, (byte) 0x00);
+			return;
+		}
+		else{
+			/* We are not authenticated, ask for an authentication */
+			W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x02);
+			return;
+		}
+	}
+
 	public void process(APDU apdu)
 	{
 		/* Self destroy? */
@@ -452,6 +581,18 @@ public class WooKeyAuth extends Applet implements ExtendedLength
                         case TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY:
 				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
 					fido_authenticate(apdu, TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY);
+					return;
+				}
+				break;
+			case TOKEN_INS_FIDO_GET_REPLAY_COUNTER:
+				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+					fido_get_replay_counter(apdu, TOKEN_INS_FIDO_GET_REPLAY_COUNTER);
+					return;
+				}
+				break;
+			case TOKEN_INS_FIDO_SET_REPLAY_COUNTER:
+				if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) == 0){
+					fido_set_replay_counter(apdu, TOKEN_INS_FIDO_SET_REPLAY_COUNTER);
 					return;
 				}
 				break;
