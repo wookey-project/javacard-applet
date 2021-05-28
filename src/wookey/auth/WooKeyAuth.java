@@ -188,7 +188,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 				W.schannel.send_encrypted_apdu(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x03);
 				return;
 			}
-			/* Now compute and store in volatile memory SHA-256(token masterkey || platform masterkey) */
+			/* Now compute and store in volatile memory SHA-256(token masterkey || platform masterkey) */
 			W.schannel.md.reset();
 			W.schannel.md.update(W.data, (short) 0, (short) 32);
 			W.schannel.md.doFinal(W.data, (short) 64, (short) 32, FIDOFullMasterKey, (short) 0);
@@ -255,10 +255,10 @@ public class WooKeyAuth extends Applet implements ExtendedLength
                 if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true) && (FIDOFullMasterKey_init == true)){
 			/* First, generate a Key Handle from our FIDO MasterKey.
 			 *   1. We get a 32 bytes random NONCE
-			 *   2. The key handle is 64 bytes concatenation of NONCE || HMAC(APP_PARAMETER || NONCE),
+			 *   2. The key handle is 64 bytes concatenation of NONCE || HMAC(APP_PARAMETER || NONCE),
 			 *      where HMAC is performed with our mixed master key.
 			 *   3. The ECDSA private key is the computed HMAC(Key Handle) with our mixed master key
-			 *   4. Send back [NONCE || HMAC(APP_PARAMETER || NONCE)] || ECDSA_priv_key
+			 *   4. Send back [NONCE || HMAC(APP_PARAMETER || NONCE)] || ECDSA_priv_key
 			 */
 			/* 1. Generate NONCE */
 			random.generateData(W.data, (short) 32, (short) 32);
@@ -266,11 +266,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
 			W.schannel.hmac_ctx.hmac_update(W.data, (short) 0, (short) 64);
 			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 64);
-			/* 3. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
+			/* 3. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
 			W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
 			W.schannel.hmac_ctx.hmac_update(W.data, (short) 32, (short) 64);
 			W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
-			/* 4. Send the response [NONCE || HMAC(APP_PARAMETER || NONCE)] || ECDSA_priv_key */
+			/* 4. Send the response [NONCE || HMAC(APP_PARAMETER || NONCE)] || ECDSA_priv_key */
 			W.schannel.send_encrypted_apdu(apdu, W.data, (short) 32, (short) 96, (byte) 0x90, (byte) 0x00);
 			return;
 		}
@@ -329,7 +329,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 		}
                 if((W.pet_pin.isValidated() == true) && (W.user_pin.isValidated() == true) && (FIDOFullMasterKey_init == true)){
 			/* 
-			 *   1. Check our Key Handle authenticity NONCE || HMAC(APP_PARAMETER || NONCE).
+			 *   1. Check our Key Handle authenticity NONCE || HMAC(APP_PARAMETER || NONCE).
 			 *   2. Return OK or not OK if CHECK ONLY
 			 *   3. Compute the ECDSA private key from the Key Handle
 			 */
@@ -358,7 +358,7 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 					}
 					else{
 
-						/* 2. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
+						/* 2. Compute ECDSA private key = HMAC(Key Handle) = HMAC(NONCE || HMAC(APP_PARAMETER || NONCE))*/
 						W.schannel.hmac_ctx.hmac_init(FIDOFullMasterKey, (short) 0, (short) FIDOFullMasterKey.length);
 						W.schannel.hmac_ctx.hmac_update(W.data, (short) 32, (short) 64);
 						W.schannel.hmac_ctx.hmac_finalize(W.data, (short) 96);
