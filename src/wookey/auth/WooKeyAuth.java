@@ -140,7 +140,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	/* FIDO case: receive platform key */
 	private void fido_receive_pkey(APDU apdu, byte ins){
 		/* This command should not be triggered! (not U2F2 profile) */
-		if((Keys.Profile.length == U2F2Profile.length) && (Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0)){
+		if(Keys.Profile.length != U2F2Profile.length){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
 			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
 			return;
 		}
@@ -214,7 +218,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	/* FIDO case: register, we generate a key handle and derive an ECDSA key */
 	private void fido_register(APDU apdu, byte ins){
 		/* This command should not be triggered! (not U2F2 profile) */
-		if((Keys.Profile.length == U2F2Profile.length) && (Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0)){
+		if(Keys.Profile.length != U2F2Profile.length){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
 			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
 			return;
 		}
@@ -289,7 +297,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	/* FIDO case: authenticate, we check a key handle and possibly generate the associated ECDSA private key */
 	private void fido_authenticate(APDU apdu, byte ins){
 		/* This command should not be triggered! (not U2F2 profile) */
-		if((Keys.Profile.length == U2F2Profile.length) && (Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0)){
+		if(Keys.Profile.length != U2F2Profile.length){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
 			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
 			return;
 		}
@@ -387,7 +399,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	/* FIDO case: get the antireplay counter */
 	private void fido_get_replay_counter(APDU apdu, byte ins){
 		/* This command should not be triggered! (not U2F2 profile) */
-		if((Keys.Profile.length == U2F2Profile.length) && (Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0)){
+		if(Keys.Profile.length != U2F2Profile.length){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
 			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
 			return;
 		}
@@ -443,7 +459,11 @@ public class WooKeyAuth extends Applet implements ExtendedLength
 	/* FIDO case: set the antireplay counter */
 	private void fido_set_replay_counter(APDU apdu, byte ins){
 		/* This command should not be triggered! (not U2F2 profile) */
-		if((Keys.Profile.length == U2F2Profile.length) && (Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0)){
+		if(Keys.Profile.length != U2F2Profile.length){
+			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
+			return;
+		}
+		if(Util.arrayCompare(Keys.Profile, (short) 0, U2F2Profile, (short) 0, (short) Keys.Profile.length) != 0){
 			W.send_error(apdu, null, (short) 0, (short) 0, WooKey.SW1_WARNING, (byte) 0x00);
 			return;
 		}
